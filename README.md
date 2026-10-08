@@ -20,6 +20,9 @@ governanca-maestro/
 ├── referencias/
 │   ├── modelos.md           # CLAUDE.md, notas do brain, skills-base, hook
 │   └── planejamento.md      # roteiro da entrevista e formato do plano
+├── skills-base/             # skills de gasto completas, copiadas para cada projeto
+│   ├── monitor-uso/         # limites Claude × Codex, equilíbrio e Sentinela
+│   └── agendar-retomada/    # checkpoint + rotina depois do limite, rede de segurança
 └── scripts/
     ├── grafo.py             # busca em grafo no brain/ (Python 3, sem dependências)
     └── uso.py               # limites de uso Claude (estimado) × Codex (exato)
@@ -49,10 +52,11 @@ Um papel global, visível em todos os workspaces, que segue esta metodologia. Ao
 1. verifica e instala a skill;
 2. diagnostica a pasta: vazia, com código ou já governada;
 3. monta a estrutura base sem perguntas;
-4. entra direto no planejamento, perguntando tudo o que precisa para entender o projeto;
-5. pede aprovação do plano e só então monta o time e executa.
+4. sobe o **Sentinela** (terminal Shell, sem custo de modelo) que vigia o gasto Claude × Codex e avisa o maestro em 75% ou em desequilíbrio;
+5. entra direto no planejamento, perguntando tudo o que precisa para entender o projeto;
+6. pede aprovação do plano e só então monta o time e executa, distribuindo as tarefas pela família com mais folga.
 
-Se a pasta já tiver governança, ele lê o `status.md` e continua de onde parou.
+Se a pasta já tiver governança, ele lê o `status.md`, confere se o Sentinela está vivo (e o recria se faltar) e continua de onde parou.
 
 **Criar ou atualizar o papel:** num terminal do Maestri em Modo Maestro, rode `sh maestri/criar-papel.sh`. O `instalar.sh` também tenta criar. O texto do papel fica em [`maestri/maestro-governanca.md`](maestri/maestro-governanca.md).
 

@@ -224,8 +224,14 @@ exploração (Haiku) → plano → **revisão do plano (Opus)** → contrato →
 - Ao esperar um agente, use um laço de verificação com intervalo (ou um aviso de conclusão) em vez de checar a toda hora.
 
 ## 6. Limites de uso e continuidade
-- **Equilíbrio entre assinaturas.** Antes de distribuir trabalho, rode `python .claude/skills/monitor-uso/uso.py status`. Se ele disser `preferir: X`, use a família X também nos campos em que ela é só a alternativa. A meta é usar as duas cotas de forma parecida e nunca parar à força.
-- **Sentinela.** Um terminal Shell, sem custo de modelo, roda `uso.py vigiar --intervalo 120 --limite 75 --avisar "<terminal do maestro>"` e avisa em 75% de uso ou em desequilíbrio de 35 pontos ou mais.
+Skills: `monitor-uso` e `agendar-retomada` (arquivos completos em `skills-base/`, copiados no bootstrap).
+- **Equilíbrio entre assinaturas.** A meta é usar as duas cotas de forma parecida e nunca parar à força. Antes de distribuir trabalho, rode `python .claude/skills/monitor-uso/uso.py status`:
+  - `preferir: codex` → use gpt-6.1-sol/gpt-6-luna também nos campos em que o Claude é o primário (app, análise, documentação);
+  - `preferir: claude` → o inverso.
+- **Poupe a cota do maestro.** Implementação vai de preferência para o Codex enquanto ele tiver mais folga; o maestro fica com orquestração, decisões e integração.
+- **Sentinela, desde o bootstrap.** Um terminal Shell, sem custo de modelo, roda `uso.py vigiar --intervalo 120 --limite 75` e avisa o maestro (nome em `sentinela-alvo.txt`) em 75% de uso numa janela, 75% do semanal do Codex ou desequilíbrio de 35 pontos ou mais. Cada alerta sai uma vez e é rearmado quando normaliza. É criado na Fase 1 (seção 11), não depois do plano.
+- **Ao receber um alerta:** rode `status`. Família perto do limite → nada longo nela, o próximo trabalho vai para a outra; se a tarefa não puder mudar, `agendar-retomada`. Desequilíbrio → priorize a família com folga nas próximas delegações.
+- **Maestro acima de 85%:** checkpoint no `status.md`, o restante vai para o Codex com instruções completas, retomada agendada.
 - **Limite atingido (reativo):**
   1. Realoque a tarefa para outro modelo disponível.
   2. Se não der, grave o checkpoint em `## Retomada agendada` no `status.md` (tarefa, feito, próximo passo exato, agentes e resets, rotina).
@@ -280,20 +286,26 @@ Gatilho típico: "siga o repo para definir a estrutura base e governança do pro
    - Se já houver arquivos na pasta (documento de escopo, código), leia-os e destile o que der.
 3. Copie as skills-base para `.claude/skills/`:
    - `brain-search/` (SKILL.md do modelo + `scripts/grafo.py` desta skill);
-   - `monitor-uso/` (SKILL.md + `scripts/uso.py`);
-   - `agendar-retomada/` (SKILL.md);
+   - `monitor-uso/` (`skills-base/monitor-uso/SKILL.md` + `scripts/uso.py`, sem resumir);
+   - `agendar-retomada/` (`skills-base/agendar-retomada/SKILL.md`, sem resumir);
    - use um vocabulário de tags provisório, que será ajustado no planejamento.
 4. Escreva o `CLAUDE.md` do modelo (a seção de regras não negociáveis fica "a definir no planejamento") e o `.claude/settings.json` com a base de modelos da seção 4.1 (Sonnet + subagentes Haiku + assessor Opus). Avise o usuário que a base vale a partir da próxima sessão, ou já, se ele reiniciar com `claude --model sonnet --advisor opus`.
 5. Salve na memória do usuário as preferências de autonomia e idioma, se ainda não existirem.
-6. Verifique:
+6. **Sentinela** (vigia de gasto; vale já durante o planejamento):
+   - rode `maestri list`; se já houver um "Sentinela" conectado, reaproveite;
+   - grave o nome do seu terminal (linha "You") em `.claude/skills/monitor-uso/sentinela-alvo.txt` e ponha esse arquivo no `.gitignore`;
+   - recrute com o comando da skill `monitor-uso` (preset "Shell", caminho absoluto com `/`, sem aspas internas) e confira com `maestri check "Sentinela"` que ele imprimiu o status e o alvo certo;
+   - registre-o em `orquestracao.md` (Roles: "(Shell) | vigia de uso, sem modelo | Sentinela");
+   - sem Maestri ou sem Modo Maestro: avise o usuário e, até lá, rode `uso.py status` antes de cada delegação.
+7. Verifique:
    - `grafo.py checar` sem problemas;
    - `grafo.py busca` e `uso.py status` funcionando;
    - o hook bloqueando um `.env` falso (apague-o depois).
-7. Commit "Bootstrap: governança, brain e skills-base". O `status.md` registra "Fase atual: planejamento".
-8. Avise em 2 ou 3 linhas o que foi criado e **entre direto na seção 12**, sem esperar outro pedido.
+8. Commit "Bootstrap: governança, brain e skills-base". O `status.md` registra "Fase atual: planejamento".
+9. Avise em 2 ou 3 linhas o que foi criado e **entre direto na seção 12**, sem esperar outro pedido.
 
 ## 12. Fase 2: planejamento (o primeiro passo de todo projeto)
-Nada é implementado e nenhum agente é recrutado antes de o usuário aprovar o plano. Siga `referencias/planejamento.md`:
+Nada é implementado e nenhum agente com modelo é recrutado antes de o usuário aprovar o plano (o Sentinela, que não usa modelo, já está de pé desde a Fase 1). Siga `referencias/planejamento.md`:
 - Faça a entrevista em blocos curtos (3 a 5 perguntas por vez, com opções quando houver escolhas típicas). Comece pelo problema e pelo objetivo, e não pela tecnologia.
 - **Grave cada resposta no brain na hora** (seção 3.5), na nota de domínio correspondente.
 - Proponha o que for decisão técnica (stack, arquitetura, hospedagem) com uma recomendação e, quando o usuário aceitar, registre como ADR.
@@ -303,5 +315,6 @@ Nada é implementado e nenhum agente é recrutado antes de o usuário aprovar o 
   - preencha as regras não negociáveis no `CLAUDE.md` e o vocabulário de tags;
   - monte a tabela de modelos em `orquestracao.md`;
   - faça o commit "Plano aprovado";
-  - se houver Maestri, rode `maestri list`, crie só os roles da primeira tarefa, a nota "Quadro do Projeto" e a Sentinela;
+  - se houver Maestri, rode `maestri list`, crie só os roles da primeira tarefa e a nota "Quadro do Projeto" (conecte-a também ao Sentinela) e confira que o Sentinela segue vivo (`maestri check "Sentinela"`);
+  - rode `uso.py status` para decidir a família de cada tarefa da Etapa 1 e crie a rede de segurança (`agendar-retomada`, seção 6) se a etapa for longa;
   - comece a Etapa 1.

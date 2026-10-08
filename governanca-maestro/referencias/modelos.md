@@ -161,8 +161,15 @@ O Claude Code é o maestro: planeja, delega, revisa e integra. O `brain/` é a f
 ## Que modelo para cada campo
 <tabela campo → primário / alternativa / esforço>
 
-## Equilíbrio de uso
-Antes de delegar, rode `uso.py status`; siga o `preferir:`. A Sentinela avisa em 75% ou em desequilíbrio ≥ 35 pontos.
+## Equilíbrio de uso Claude × Codex
+- **Objetivo:** usar as duas assinaturas de forma equivalente e nunca parar à força por limite.
+- **Antes de delegar:** rode `python .claude/skills/monitor-uso/uso.py status`.
+  - Se `preferir: codex`, use gpt-6.1-sol/gpt-6-luna também nos campos em que o Claude é o primário: app, análise, documentação.
+  - Se `preferir: claude`, o inverso.
+- Tarefas de implementação vão de preferência para o **Codex enquanto ele tiver mais folga**. O maestro (Claude) fica com orquestração, decisões e integração, para poupar a própria cota.
+- Maestro acima de 85%: checkpoint no `status.md`, o restante vai para o Codex com instruções completas e a retomada é agendada.
+- **Sentinela** (terminal Shell, sem custo de modelo) avisa o maestro em 75% ou em desequilíbrio de 35 pontos ou mais. Skill: `monitor-uso`.
+- Limite atingido: realocar; senão, checkpoint + `agendar-retomada`. Tarefa longa: rede de segurança antes.
 
 ## Roles criados
 | Role | Escopo | Usado por |
@@ -245,47 +252,11 @@ Dicas: 2 a 4 termos. A busca ignora acentos e maiúsculas.
 Frontmatter `resumo` / `tags` / `aliases`. Vocabulário de tags: <lista>. Links `[[nota]]` e pelo menos um backlink. Uma ideia por `##`. Arquivos `_*.md` são ignorados.
 ```
 
-## .claude/skills/monitor-uso/SKILL.md
-Copie `scripts/uso.py` para `.claude/skills/monitor-uso/uso.py`.
-```markdown
----
-name: monitor-uso
-description: Consulta os limites de uso do Claude (estimado) e do Codex (exato) para decidir para qual família delegar e evitar paradas forçadas. Use antes de distribuir tarefas, quando a Sentinela avisar, ou quando o usuário perguntar sobre limites.
----
-
-# monitor-uso
-`python .claude/skills/monitor-uso/uso.py <status|json|vigiar>`
-- Codex: lê `rate_limits` de `~/.codex/sessions`; o valor é exato.
-- Claude: estima pelos tokens ponderados em `~/.claude/projects` (janela de 5 h), calibrado pelo último 429.
-- A saída traz `preferir: codex|claude|equilibrado`.
-
-Sentinela: terminal Shell com `uso.py vigiar --intervalo 120 --limite 75 --avisar "<terminal do maestro>"`.
-
-Ao receber um alerta:
-1. Rode `status`.
-2. Se uma família estiver perto do limite, mande o próximo trabalho para a outra.
-3. Se a tarefa não puder mudar de família, use `agendar-retomada`.
-4. Se o maestro passar de 85%: faça o checkpoint, delegue o restante e agende a retomada.
-```
-
-## .claude/skills/agendar-retomada/SKILL.md
-```markdown
----
-name: agendar-retomada
-description: Agenda ações futuras do projeto, em especial a continuação de uma tarefa quando um modelo atinge o limite de uso, usando rotinas do Maestri. Use quando aparecer "usage limit", "rate limit", "quota exceeded", 429, RESOURCE_EXHAUSTED, "try again in", "limit will reset at"; quando o usuário avisar do limite; e ANTES de tarefas longas ou lotes de delegação.
----
-
-# agendar-retomada
-1. **Detectar:** leia a saída dos recrutas com `maestri check "<Nome>"` e anote o horário de reset, se houver.
-2. **Realocar, se der:** outro modelo disponível assume a tarefa agora.
-3. **Checkpoint** em `brain/status.md` → `## Retomada agendada`: tarefa, feito, próximo passo exato, agentes e resets, rotina.
-4. **Horário:** o maior reset + 5 min. Se for desconhecido, use 1 h (Codex/Gemini) ou 5 h (Claude), registrado como estimativa.
-5. **Agendar:** rode `maestri routine list` e depois:
-   `maestri routine create "Retomar: <tarefa>" --once "<AAAA-MM-DD HH:mm>" --command "Retomada agendada: leia 'Retomada agendada' em brain/status.md e continue do próximo passo. Verifique antes se ainda está pendente."`
-   (para um recruta, use `--terminal "<Nome>"`; o maestro agenda depois dele.) Avise o usuário.
-6. **Preventivo:** antes de uma tarefa longa, crie `Rede: <tarefa>` em agora + 5 h 10 min. Ao concluir, `maestri routine disable` (nunca delete sem pedido) e limpe a seção.
-7. **Ao retomar:** confira o estado real, continue, limpe a seção e registre no diário.
-```
+## .claude/skills/monitor-uso/ e .claude/skills/agendar-retomada/
+Não reescreva: copie os arquivos completos desta skill.
+- `skills-base/monitor-uso/SKILL.md` + `scripts/uso.py` → `.claude/skills/monitor-uso/`
+- `skills-base/agendar-retomada/SKILL.md` → `.claude/skills/agendar-retomada/`
+- Crie `.claude/skills/monitor-uso/sentinela-alvo.txt` com o nome do terminal do maestro (linha "You" de `maestri list`) e coloque esse arquivo no `.gitignore`.
 
 ## Skill "porta única" (recurso sensível)
 ```markdown

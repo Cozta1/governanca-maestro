@@ -9,7 +9,10 @@ a última rejeição registrada (calibração). Sem rejeição registrada, mostr
 Uso:
   uso.py status                     # resumo legível
   uso.py json                       # resumo em JSON
-  uso.py vigiar [--intervalo 120] [--limite 75] [--avisar "Claude Code Maestro"]
+  uso.py vigiar [--intervalo 120] [--limite 75] [--avisar "<terminal do maestro>"]
+
+Sem --avisar, o vigia avisa o terminal escrito em sentinela-alvo.txt (ao lado deste script),
+ou "Claude Code Maestro" se o arquivo não existir. Assim o comando do Sentinela não precisa de aspas.
 """
 import argparse
 import glob
@@ -216,7 +219,18 @@ def avisar(alvo, msg):
         print(f"falha ao avisar: {e}", file=sys.stderr)
 
 
+def alvo_padrao():
+    arq = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sentinela-alvo.txt")
+    try:
+        with open(arq, encoding="utf-8") as f:
+            return f.read().strip() or "Claude Code Maestro"
+    except OSError:
+        return "Claude Code Maestro"
+
+
 def vigiar(intervalo, limite, alvo):
+    alvo = alvo or alvo_padrao()
+    print(f"Sentinela: avisando '{alvo}' (limite {limite}%, a cada {intervalo} s)", flush=True)
     ja_avisado = set()
     while True:
         r = resumo()
@@ -241,7 +255,7 @@ def main():
     v = sub.add_parser("vigiar")
     v.add_argument("--intervalo", type=int, default=120)
     v.add_argument("--limite", type=float, default=75)
-    v.add_argument("--avisar", default="Claude Code Maestro")
+    v.add_argument("--avisar", default=None)
     a = p.parse_args()
     if a.cmd == "status":
         print(texto(resumo()))
