@@ -31,6 +31,16 @@ Escopo original: `<documento>`. Stack: <resumo> (ver `brain/decisoes/0001-*.md`)
 Idioma: <idioma>.
 ```
 
+## .claude/settings.json (base de modelos do projeto)
+```json
+{
+  "model": "sonnet",
+  "advisorModel": "opus",
+  "env": { "CLAUDE_CODE_SUBAGENT_MODEL": "haiku" }
+}
+```
+Se o projeto já tiver um `settings.json`, acrescente essas chaves sem apagar as existentes.
+
 ## brain/README.md
 ```markdown
 ---
@@ -136,11 +146,14 @@ O Claude Code é o maestro: planeja, delega, revisa e integra. O `brain/` é a f
 ## Modelos disponíveis
 | Família | Modelo | Perfil | Como recrutar |
 |---|---|---|---|
-| Claude | Opus | maestro | — |
-| Claude | Sonnet | código, UI, análise | `--preset "Claude Code" --command "claude --model sonnet --add-dir <projeto>"` |
-| Claude | Haiku | barato | `--command "claude --model haiku --add-dir <projeto>"` |
+| Claude | Sonnet | maestro e recrutas: dirige e constrói | `--preset "Claude Code" --command "claude --model sonnet --advisor opus --add-dir <projeto>"` |
+| Claude | Haiku | subagentes de exploração (paralelos, só leitura) | `CLAUDE_CODE_SUBAGENT_MODEL=haiku` (via `.claude/settings.json`) |
+| Claude | Opus | assessor (advisor): plano, erro repetido, conferência final | `--advisor opus` / `advisorModel` |
 | GPT (Codex) | <forte> | backend, revisão | `--preset "Codex" --command "codex -m <modelo> -s workspace-write --add-dir <projeto>"` |
 | GPT (Codex) | <leve> | testes, mecânico | idem, com o modelo leve |
+
+## Configuração base Claude
+Sonnet constrói, Haiku explora, Opus revisa (assessor). Configurado em `.claude/settings.json`; o Opus só entra para revisar planos, desbloquear erros repetidos e fazer a conferência final.
 
 ## Que modelo para cada campo
 <tabela campo → primário / alternativa / esforço>

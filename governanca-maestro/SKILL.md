@@ -14,7 +14,7 @@ Arquivos desta skill:
 - `referencias/planejamento.md`: roteiro da entrevista de planejamento e formato do plano (seção 12).
 
 ## 1. Princípios
-1. **Maestro e orquestra.** A sessão principal (o modelo mais capaz) planeja, decide, delega, revisa e integra. Quem executa são agentes mais baratos e especializados.
+1. **Sonnet constrói, Haiku explora, Opus revisa.** A sessão principal (o maestro) roda em **Sonnet**: planeja, escreve código, delega e integra. **Haiku** explora arquivos e documentação em paralelo, como subagente. **Opus** fica como **assessor** (advisor) e só entra nas decisões importantes. Agentes de outras famílias (Codex/GPT, Gemini) completam o time, sobretudo na revisão cruzada (seção 4).
 2. **Fonte única de contexto: `brain/`.** É a camada de informações e armazenamento do projeto: todo agente consulta o brain antes de agir e grava nele o que descobre. Nenhum conhecimento depende da memória de uma conversa (seção 3).
 3. **Custo mínimo suficiente.** Use o modelo e o esforço mais baratos que resolvem bem a tarefa. Só suba de nível quando ela exigir ou quando a tentativa barata falhar.
 4. **Diversidade na revisão.** Quem implementa nunca revisa o próprio trabalho. A revisão é de preferência cruzada entre famílias (Claude ↔ GPT).
@@ -127,45 +127,84 @@ documento de escopo ► destilado em visao / requisitos / arquitetura (original 
 - Não leia o brain inteiro para "se atualizar": isso anula o propósito da camada.
 
 ## 4. Orquestração
-**Ferramentas, em ordem de preferência**
-1. **Canvas Maestri** (skills `maestri-manager`, `maestri`, `maestri-routines`, `maestri-workspace`, `maestri-portal`). Agentes visíveis e persistentes, notas compartilhadas, floors (git worktree), portais de navegador/dispositivo e rotinas.
-2. **Subagentes internos do Claude Code** (`Agent`, com `model: haiku|sonnet|opus`). Só para buscas rápidas e descartáveis.
-3. **O próprio maestro.** Não delegue o que você resolve em 1 ou 2 comandos: delegar também custa (inicialização e contexto).
+### 4.1 Configuração base da sessão Claude: Sonnet + Haiku + Opus assessor
+| Papel | Modelo | O que faz |
+|---|---|---|
+| Dirige a sessão (maestro) | **Sonnet** | planeja, escreve código, delega, integra e conversa com o usuário |
+| Explora | **Haiku** (subagentes) | lê arquivos, código e documentação em paralelo e devolve só o resumo |
+| Assessora | **Opus** (advisor) | revisa planos, desbloqueia erros repetidos e confere o que pode ter ficado de fora |
 
-**Recrutar**
+Como iniciar (verificado no Claude Code 2.1.286):
+```sh
+# bash / Git Bash
+CLAUDE_CODE_SUBAGENT_MODEL=haiku claude --model sonnet --advisor opus
+# PowerShell
+$env:CLAUDE_CODE_SUBAGENT_MODEL="haiku"; claude --model sonnet --advisor opus
+```
+Ou, de forma fixa por projeto, em `.claude/settings.json` (o bootstrap cria esse arquivo):
+```json
+{ "model": "sonnet", "advisorModel": "opus", "env": { "CLAUDE_CODE_SUBAGENT_MODEL": "haiku" } }
+```
+- `--advisor` / `advisorModel` liga a ferramenta de assessor no servidor. Dentro da sessão, `/advisor` troca ou desliga o assessor. O assessor precisa ser **pelo menos tão capaz** quanto o modelo principal; se não for, ele é ignorado.
+- `CLAUDE_CODE_SUBAGENT_MODEL` define o modelo padrão dos subagentes (`CLAUDE_CODE_SUBAGENT_MODEL_FORCE` impõe esse modelo até sobre o `model` pedido pelo agente). **Não existe flag `--subagents`.**
+- Use os apelidos (`haiku`, `sonnet`, `opus`): eles apontam sempre para a versão mais recente de cada família.
+
+**Quando chamar o Opus (assessor)**: só nestes momentos. Fora deles, o Sonnet segue sozinho.
+1. **Revisar o plano** antes de executar (plano do projeto, plano de uma etapa, mudança de arquitetura, ADR).
+2. **Desbloquear** um erro que se repetiu depois de 2 tentativas de correção.
+3. **Conferir antes de finalizar** uma etapa ou commit importante: requisitos atendidos, casos de borda, segurança e regras não negociáveis.
+4. **Decisões difíceis de reverter**: esquema de dados, contratos públicos, segurança e privacidade.
+
+**Quando usar o Haiku (exploração)**
+- Antes de mudar código desconhecido: um ou mais subagentes Haiku em paralelo, cada um com uma pergunta precisa ("onde X é validado? devolva arquivo:linha e 3 linhas de resumo").
+- Pesquisa em documentação de bibliotecas, varredura de padrões e inventário de arquivos.
+- O Haiku **só lê e resume**: não edita e não decide. O Sonnet confere o trecho apontado antes de agir.
+
+**Recrutas Claude no Maestri** seguem a mesma base: `--preset "Claude Code" --command "claude --model sonnet --advisor opus --add-dir <projeto>"`, com `CLAUDE_CODE_SUBAGENT_MODEL=haiku` no ambiente (ou o `.claude/settings.json` do projeto, que o recruta também lê).
+
+### 4.2 Ferramentas, em ordem de preferência
+1. **Canvas Maestri** (skills `maestri-manager`, `maestri`, `maestri-routines`, `maestri-workspace`, `maestri-portal`). Agentes visíveis e persistentes, notas compartilhadas, floors (git worktree), portais de navegador/dispositivo e rotinas.
+2. **Subagentes internos do Claude Code** (Haiku por padrão, seção 4.1). São o caminho de **exploração**: paralelos, só leitura, devolvem resumo.
+3. **O próprio maestro (Sonnet).** Não delegue o que você resolve em 1 ou 2 comandos: delegar também custa (inicialização e contexto).
+
+### 4.3 Recrutar
 - Rode sempre `maestri list` antes e **reaproveite** quem já existe: o contexto dele já está pago.
 - Defina um **role** por função (escopo de pastas + o que pode e o que não pode fazer) e um **codinome** curto por agente.
 - **Sempre dê ao recruta o diretório do projeto** (`--add-dir <projeto>`; no Codex também `-s workspace-write`). Sem isso, o recruta fica preso na pasta do role.
 - Roles típicos: Dev Backend, Dev App/Front, Dev Testes (E2E), Revisor de Código (não edita), Designer UI/UX, Revisor de Design (não edita), Sentinela (Shell, sem modelo).
 
-**Que modelo para cada campo** (ajuste a tabela de `orquestracao.md` aos modelos disponíveis)
+### 4.4 Que modelo para cada campo
+Ajuste a tabela de `orquestracao.md` aos modelos disponíveis.
 | Campo | Primário | Alternativa | Esforço |
 |---|---|---|---|
-| Arquitetura, ADRs, integração, decisões | maestro (Opus) | GPT forte (2ª opinião) | médio; alto só se crítico |
+| Arquitetura, ADRs, integração, decisões | maestro (Sonnet) **+ assessor Opus** | GPT forte (2ª opinião) | médio; alto só se crítico |
 | Backend / algoritmos | GPT forte (Codex) | Sonnet | médio / alto |
-| Front / app / UI | Sonnet | GPT forte, Gemini | médio |
+| Front / app / UI | Sonnet (+ Haiku para explorar) | GPT forte, Gemini | médio |
 | Análise de dados, SQL, relatórios | Sonnet | GPT leve | médio |
 | Testes, refatoração mecânica | GPT leve | Haiku | baixo / médio |
-| Revisão de código e segurança | família **oposta** à do autor | — | médio / alto |
+| Revisão de código e segurança | família **oposta** à do autor (autor Claude → GPT; autor GPT → Sonnet + assessor Opus) | — | médio / alto |
 | Documentação, notas, resumos | Haiku | GPT leve | baixo |
-| Busca descartável | subagente Haiku | — | baixo |
+| Exploração: arquivos, código, documentação | subagentes Haiku em paralelo | — | baixo |
+| Plano, erro repetido, conferência final | assessor Opus (só nesses momentos) | GPT forte | — |
 
-**Delegar bem**
+### 4.5 Delegar bem
 - O prompt é curto e autocontido: objetivo, escopo de arquivos, restrições, critério de pronto e formato da resposta ("responda em até N linhas: arquivos alterados, testes, dúvidas").
 - Cite **só** as seções do brain necessárias (caminho + linhas), nunca "leia o brain".
 - Tarefas independentes vão em paralelo (`maestri ask --batch`). Tarefas que mexem nos mesmos arquivos vão em sequência ou em floors separados.
 - Contratos compartilhados (tipos, schemas) são escritos **antes** pelo maestro e só então distribuídos. Assim backend e front trabalham em paralelo sem colidir.
 - Achados de revisão vão para uma **nota do canvas** ("Revisao <área>") conectada ao autor, que marca cada item como `[corrigido]`, `[backlog]` ou `[não procede]`.
 
-**Ciclo de entrega que funciona**
-contrato → implementação em paralelo → verificação do maestro (typecheck/testes) → revisão cruzada → correções → E2E → conferência visual (se houver UI) → commit da rodada → brain atualizado.
+### 4.6 Ciclo de entrega que funciona
+exploração (Haiku) → plano → **revisão do plano (Opus)** → contrato → implementação em paralelo (Sonnet/Codex) → verificação do maestro (typecheck/testes) → revisão cruzada → correções → E2E → conferência visual (se houver UI) → **conferência final (Opus)** → commit da rodada → brain atualizado.
 
 ## 5. Economia de tokens
 - `status.md` no início; depois disso, **só busca no grafo + leitura por intervalo**.
 - `CLAUDE.md` curto: regras e ponteiros, sem conteúdo que já está no brain.
 - Saídas longas de comandos: filtre (`tail`, `grep`, `--reporter=dot`) ou mande para um arquivo e leia o trecho. Atenção: **nunca** use pipe dentro da condição de um commit (veja a seção 8).
 - Prefira reaproveitar um recruta a criar outro, e recrutar a carregar tudo no contexto do maestro.
-- O maestro (o modelo mais caro) fica com o que exige julgamento. Implementação, testes e documentação vão para modelos mais baratos.
+- **O contexto do Opus é o mais caro: preserve-o.** Ele só recebe o essencial (o plano, o erro com as tentativas feitas, o diff final) e só nos momentos da seção 4.1. A sessão do dia a dia roda em Sonnet.
+- **Exploração em Haiku, não no contexto principal.** Ler muitos arquivos para achar uma coisa é trabalho de subagente: ele devolve `arquivo:linha` e um resumo, e o Sonnet lê só o trecho.
+- Implementação mecânica, testes e documentação vão para os modelos mais baratos (Haiku, GPT leve).
 - Respostas dos agentes: concisas por contrato do prompt. Relatórios ao usuário: curtos, com o que foi feito, o que foi verificado e o que falta.
 - Skills com divulgação progressiva: um `SKILL.md` enxuto e os detalhes em `referencias/`, lidos só quando necessários.
 - Ao esperar um agente, use um laço de verificação com intervalo (ou um aviso de conclusão) em vez de checar a toda hora.
@@ -208,6 +247,7 @@ contrato → implementação em paralelo → verificação do maestro (typecheck
 - No modo autopiloto: escolha a próxima frente pelo roadmap, avise em uma linha e siga com rede de segurança ativa.
 
 ## 10. Lições operacionais (Maestri, Codex, Claude Code)
+- Antes de adotar dicas da internet sobre flags ou modelos, confira na versão instalada (`claude --help`, um teste com `-p`). Um exemplo: um post recomendava `claude --advisor opus --subagents haiku` com "Haiku 5.5". O `--advisor` existe; o `--subagents` não existe (use `CLAUDE_CODE_SUBAGENT_MODEL`), e o Haiku mais recente é o 4.5 (use o apelido `haiku`).
 - Prompts longos no Codex podem ficar parados na caixa de entrada. Depois do `ask`, confira com `maestri check` e, se preciso, envie Enter com `maestri ask "<Nome>" --raw "\n"`.
 - O sandbox do Codex não tem o CLI `maestri`. Para passar uma nota a ele, copie o conteúdo para um arquivo na pasta do role.
 - Aprovações de comandos do Codex fora do sandbox: aprove **uma vez** (`--raw "y"`), só depois de conferir o comando. Nunca escolha "não perguntar de novo".
@@ -228,7 +268,7 @@ Gatilho típico: "siga o repo para definir a estrutura base e governança do pro
    - `monitor-uso/` (SKILL.md + `scripts/uso.py`);
    - `agendar-retomada/` (SKILL.md);
    - use um vocabulário de tags provisório, que será ajustado no planejamento.
-4. Escreva o `CLAUDE.md` do modelo. A seção de regras não negociáveis fica "a definir no planejamento".
+4. Escreva o `CLAUDE.md` do modelo (a seção de regras não negociáveis fica "a definir no planejamento") e o `.claude/settings.json` com a base de modelos da seção 4.1 (Sonnet + subagentes Haiku + assessor Opus). Avise o usuário que a base vale a partir da próxima sessão, ou já, se ele reiniciar com `claude --model sonnet --advisor opus`.
 5. Salve na memória do usuário as preferências de autonomia e idioma, se ainda não existirem.
 6. Verifique:
    - `grafo.py checar` sem problemas;
@@ -242,6 +282,7 @@ Nada é implementado e nenhum agente é recrutado antes de o usuário aprovar o 
 - Faça a entrevista em blocos curtos (3 a 5 perguntas por vez, com opções quando houver escolhas típicas). Comece pelo problema e pelo objetivo, e não pela tecnologia.
 - **Grave cada resposta no brain na hora** (seção 3.5), na nota de domínio correspondente.
 - Proponha o que for decisão técnica (stack, arquitetura, hospedagem) com uma recomendação e, quando o usuário aceitar, registre como ADR.
+- **Antes de apresentar o plano consolidado, peça a revisão do assessor Opus** (lacunas, riscos, contradições) e incorpore o que proceder.
 - Feche com o **plano consolidado** (visão, escopo da 1ª entrega, fora de escopo, requisitos, riscos, roadmap em etapas, primeira tarefa) e peça aprovação explícita.
 - Depois de aprovado:
   - preencha as regras não negociáveis no `CLAUDE.md` e o vocabulário de tags;
