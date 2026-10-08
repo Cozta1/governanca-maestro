@@ -25,5 +25,8 @@ cp -r governanca-maestro <projeto>/.claude/skills/
 ## Usar
 Num projeto, peça "aplique a governança neste projeto" ou rode `/governanca-maestro`. O Claude segue o checklist de bootstrap (seção 11 do `SKILL.md`): cria o `brain/`, as skills-base, o `CLAUDE.md` e o hook de pre-commit.
 
+## Projeto novo a partir de uma pasta vazia
+Use o prompt pronto em [`PROMPT-NOVO-PROJETO.md`](PROMPT-NOVO-PROJETO.md): abra o Claude Code na pasta vazia, cole o bloco e preencha os campos.
+
 ## Atualizar
 Edite neste repositório, faça o commit e reinstale com o `cp` acima. Melhorias descobertas num projeto (lições, regras novas) voltam para cá.
