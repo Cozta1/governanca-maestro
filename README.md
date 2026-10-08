@@ -1,32 +1,42 @@
 # governanca-maestro
 
-Skill do Claude Code com uma metodologia de governança para projetos de software orquestrados por IA. O Claude atua como maestro e delega a agentes Claude, Codex e Gemini. O `brain/` funciona como camada de informações e armazenamento. A skill também cobre a escolha de modelo por custo, a economia de tokens, os limites de uso com retomada agendada, a criação de skills e os commits verificados.
+Skill do Claude Code com uma metodologia de governança para projetos de software orquestrados por IA:
+- o Claude atua como maestro e delega a agentes Claude, Codex e Gemini;
+- o `brain/` funciona como camada de informações e armazenamento;
+- os modelos são escolhidos pelo custo, com economia de tokens;
+- os limites de uso são monitorados e o trabalho é retomado por agendamento;
+- procedimentos repetidos viram skills;
+- commits só entram verificados.
+
+Todo projeto começa com **estrutura base → plano aprovado → execução**.
 
 ## Conteúdo
 ```
+instalar.sh                  # instala/atualiza a skill + atalho no ~/.claude/CLAUDE.md
+PROMPT-NOVO-PROJETO.md       # como começar um projeto do zero
 governanca-maestro/
-├── SKILL.md               # o guia (carregado pelo Claude Code)
-├── referencias/modelos.md # modelos de CLAUDE.md, notas do brain, skills-base e hook
+├── SKILL.md                 # o guia (carregado pelo Claude Code)
+├── referencias/
+│   ├── modelos.md           # CLAUDE.md, notas do brain, skills-base, hook
+│   └── planejamento.md      # roteiro da entrevista e formato do plano
 └── scripts/
-    ├── grafo.py           # busca em grafo no brain/ (Python 3, sem dependências)
-    └── uso.py             # limites de uso Claude (estimado) × Codex (exato)
+    ├── grafo.py             # busca em grafo no brain/ (Python 3, sem dependências)
+    └── uso.py               # limites de uso Claude (estimado) × Codex (exato)
 ```
 
-## Instalar
-Para o seu usuário (vale em todos os projetos):
+## Instalar (uma vez por máquina)
 ```sh
-cp -r governanca-maestro ~/.claude/skills/
+git clone https://github.com/Cozta1/governanca-maestro.git
+cd governanca-maestro && sh instalar.sh
 ```
-Para um projeto só (versionada junto com ele):
-```sh
-cp -r governanca-maestro <projeto>/.claude/skills/
-```
+O script copia a skill para `~/.claude/skills/` e adiciona ao `~/.claude/CLAUDE.md` um atalho que vale em todas as sessões.
 
 ## Usar
-Num projeto, peça "aplique a governança neste projeto" ou rode `/governanca-maestro`. O Claude segue o checklist de bootstrap (seção 11 do `SKILL.md`): cria o `brain/`, as skills-base, o `CLAUDE.md` e o hook de pre-commit.
-
-## Projeto novo a partir de uma pasta vazia
-Use o prompt pronto em [`PROMPT-NOVO-PROJETO.md`](PROMPT-NOVO-PROJETO.md): abra o Claude Code na pasta vazia, cole o bloco e preencha os campos.
+Numa pasta vazia (ou num projeto existente), mande:
+```text
+siga o repo para definir a estrutura base e governança do projeto
+```
+O Claude monta a estrutura, entra direto no planejamento com você e só começa a executar depois que você aprovar o plano. Detalhes e a versão longa do prompt estão em [`PROMPT-NOVO-PROJETO.md`](PROMPT-NOVO-PROJETO.md).
 
 ## Atualizar
-Edite neste repositório, faça o commit e reinstale com o `cp` acima. Melhorias descobertas num projeto (lições, regras novas) voltam para cá.
+Edite neste repositório, faça o commit e o push, e rode `sh instalar.sh` de novo. Melhorias descobertas num projeto (lições, regras novas) voltam para cá.

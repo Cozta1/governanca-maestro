@@ -1,6 +1,6 @@
 ---
 name: governanca-maestro
-description: Metodologia de governança para projetos de software orquestrados por IA. Claude é o maestro e delega a agentes Claude/Codex/Gemini (canvas Maestri ou subagentes). Cobre o segundo cérebro em brain/ como camada de informações e armazenamento (o que fica onde, protocolos de leitura e escrita, ciclo de vida, busca em grafo), a escolha de modelo por custo, a economia de tokens, os limites de uso e a retomada agendada, a criação de skills, ADRs, commits verificados e regras não negociáveis. Use ao INICIAR um projeto novo ("monte a estrutura", "aplique a governança", "bootstrap"), ao organizar o trabalho com agentes, ou quando o usuário perguntar como o processo funciona.
+description: Metodologia de governança para projetos de software orquestrados por IA. Claude é o maestro e delega a agentes Claude/Codex/Gemini (canvas Maestri ou subagentes). Cobre o segundo cérebro em brain/ como camada de informações e armazenamento (o que fica onde, protocolos de leitura e escrita, ciclo de vida, busca em grafo), a escolha de modelo por custo, a economia de tokens, os limites de uso e a retomada agendada, a criação de skills, ADRs, commits verificados e regras não negociáveis. Use ao INICIAR um projeto ("siga o repo", "estrutura base e governança", "monte a estrutura", "aplique a governança", "bootstrap", "governanca-maestro"): monte a estrutura e em seguida conduza o planejamento com o usuário, ao organizar o trabalho com agentes, ou quando o usuário perguntar como o processo funciona.
 ---
 
 # governanca-maestro: método para projetos orquestrados por IA
@@ -11,6 +11,7 @@ Arquivos desta skill:
 - `scripts/grafo.py`: busca em grafo no `brain/`. Python 3 puro, sem dependências.
 - `scripts/uso.py`: limites de uso do Claude (estimado) e do Codex (exato).
 - `referencias/modelos.md`: modelos prontos de cada arquivo (CLAUDE.md, notas, skills, hook). Leia só a seção que for usar.
+- `referencias/planejamento.md`: roteiro da entrevista de planejamento e formato do plano (seção 12).
 
 ## 1. Princípios
 1. **Maestro e orquestra.** A sessão principal (o modelo mais capaz) planeja, decide, delega, revisa e integra. Quem executa são agentes mais baratos e especializados.
@@ -215,17 +216,36 @@ contrato → implementação em paralelo → verificação do maestro (typecheck
 - Processos em segundo plano do maestro (servidores) param no tempo limite; para servidores de dev, use o máximo.
 - Revisão visual: confira o DOM e a tela realmente servidos, não só o código (caches de bundler enganam).
 
-## 11. Bootstrap de um projeto novo
-Execute na raiz do projeto, adaptando os modelos de `referencias/modelos.md`:
-1. `git init` (se preciso), `.gitignore` e `.githooks/pre-commit` + `git config core.hooksPath .githooks`.
-2. Crie o `brain/` (camada de informações, seção 3) com as notas-base (README, status, diario, inbox, perguntas-abertas, glossario, roadmap, orquestracao, decisoes/README + _modelo). Se houver um documento de escopo, destile-o em visao/requisitos/arquitetura.
+## 11. Fase 1: estrutura base (bootstrap)
+Gatilho típico: "siga o repo para definir a estrutura base e governança do projeto". Monte a estrutura **sem perguntar nada**: ela não depende do conteúdo. Deixe as notas de domínio como esqueletos que o planejamento (seção 12) vai preencher. Execute na raiz, adaptando `referencias/modelos.md`:
+1. `git init -b main` (se preciso), `.gitignore` (inclua `.env`, `dados-locais/`, artefatos de teste), `.env.example`, `.githooks/pre-commit` + `git config core.hooksPath .githooks`.
+2. Crie o `brain/` (camada de informações, seção 3):
+   - notas-base: README, status, diario, inbox, perguntas-abertas, glossario, roadmap, orquestracao, decisoes/README + _modelo;
+   - esqueletos `visao.md`, `requisitos.md`, `arquitetura.md`, com frontmatter e seções `##` marcadas "a definir no planejamento".
+   - Se já houver arquivos na pasta (documento de escopo, código), leia-os e destile o que der.
 3. Copie as skills-base para `.claude/skills/`:
    - `brain-search/` (SKILL.md do modelo + `scripts/grafo.py` desta skill);
    - `monitor-uso/` (SKILL.md + `scripts/uso.py`);
    - `agendar-retomada/` (SKILL.md);
-   - ajuste o vocabulário de tags na brain-search.
-4. Escreva o `CLAUDE.md` do modelo, com as regras não negociáveis do projeto.
+   - use um vocabulário de tags provisório, que será ajustado no planejamento.
+4. Escreva o `CLAUDE.md` do modelo. A seção de regras não negociáveis fica "a definir no planejamento".
 5. Salve na memória do usuário as preferências de autonomia e idioma, se ainda não existirem.
-6. Rode `grafo.py checar` até zerar os problemas e faça o commit inicial.
-7. Se houver Maestri: `maestri list`, crie os roles, recrute só o necessário para a primeira tarefa, crie a nota "Quadro do Projeto" e suba a Sentinela.
-8. Registre a sessão no `diario.md` e os próximos passos no `status.md`.
+6. Verifique:
+   - `grafo.py checar` sem problemas;
+   - `grafo.py busca` e `uso.py status` funcionando;
+   - o hook bloqueando um `.env` falso (apague-o depois).
+7. Commit "Bootstrap: governança, brain e skills-base". O `status.md` registra "Fase atual: planejamento".
+8. Avise em 2 ou 3 linhas o que foi criado e **entre direto na seção 12**, sem esperar outro pedido.
+
+## 12. Fase 2: planejamento (o primeiro passo de todo projeto)
+Nada é implementado e nenhum agente é recrutado antes de o usuário aprovar o plano. Siga `referencias/planejamento.md`:
+- Faça a entrevista em blocos curtos (3 a 5 perguntas por vez, com opções quando houver escolhas típicas). Comece pelo problema e pelo objetivo, e não pela tecnologia.
+- **Grave cada resposta no brain na hora** (seção 3.5), na nota de domínio correspondente.
+- Proponha o que for decisão técnica (stack, arquitetura, hospedagem) com uma recomendação e, quando o usuário aceitar, registre como ADR.
+- Feche com o **plano consolidado** (visão, escopo da 1ª entrega, fora de escopo, requisitos, riscos, roadmap em etapas, primeira tarefa) e peça aprovação explícita.
+- Depois de aprovado:
+  - preencha as regras não negociáveis no `CLAUDE.md` e o vocabulário de tags;
+  - monte a tabela de modelos em `orquestracao.md`;
+  - faça o commit "Plano aprovado";
+  - se houver Maestri, rode `maestri list`, crie só os roles da primeira tarefa, a nota "Quadro do Projeto" e a Sentinela;
+  - comece a Etapa 1.
