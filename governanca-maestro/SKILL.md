@@ -14,7 +14,7 @@ Arquivos desta skill:
 - `referencias/planejamento.md`: roteiro da entrevista de planejamento e formato do plano (seção 12).
 
 ## 1. Princípios
-1. **Sonnet constrói, Haiku explora, Opus revisa.** A sessão principal (o maestro) roda em **Sonnet**: planeja, escreve código, delega e integra. **Haiku** explora arquivos e documentação em paralelo, como subagente. **Opus** fica como **assessor** (advisor) e só entra nas decisões importantes. Agentes de outras famílias (Codex/GPT, Gemini) completam o time, sobretudo na revisão cruzada (seção 4).
+1. **Sonnet constrói, Haiku explora, Opus revisa.** A sessão principal (o maestro) roda em **Sonnet**: planeja, escreve código, delega e integra. **Haiku** explora arquivos e documentação em paralelo, como subagente. **Opus** fica como **assessor** (advisor) e só entra nas decisões importantes. No Codex vale a mesma estrutura: **gpt-6.1-sol** constrói, **gpt-6-luna** explora e **gpt-6.1-sol em xhigh** revisa, **sem nunca usar o gpt-6-astra** (seção 4.2). As duas famílias se revisam uma à outra (revisão cruzada).
 2. **Fonte única de contexto: `brain/`.** É a camada de informações e armazenamento do projeto: todo agente consulta o brain antes de agir e grava nele o que descobre. Nenhum conhecimento depende da memória de uma conversa (seção 3).
 3. **Custo mínimo suficiente.** Use o modelo e o esforço mais baratos que resolvem bem a tarefa. Só suba de nível quando ela exigir ou quando a tentativa barata falhar.
 4. **Diversidade na revisão.** Quem implementa nunca revisa o próprio trabalho. A revisão é de preferência cruzada entre famílias (Claude ↔ GPT).
@@ -162,39 +162,53 @@ Ou, de forma fixa por projeto, em `.claude/settings.json` (o bootstrap cria esse
 
 **Recrutas Claude no Maestri** seguem a mesma base: `--preset "Claude Code" --command "claude --model sonnet --advisor opus --add-dir <projeto>"`, com `CLAUDE_CODE_SUBAGENT_MODEL=haiku` no ambiente (ou o `.claude/settings.json` do projeto, que o recruta também lê).
 
-### 4.2 Ferramentas, em ordem de preferência
+### 4.2 Mesma estrutura no Codex: Sol constrói, Luna explora, Sol xhigh revisa
+| Papel | Modelo | Esforço | Como |
+|---|---|---|---|
+| Dirige e constrói | **gpt-6.1-sol** | medium | `codex -m gpt-6.1-sol -c model_reasoning_effort="medium"` |
+| Explora | **gpt-6-luna** | low | subagente papel `explorador` (só leitura) |
+| Assessora / revisa | **gpt-6.1-sol** | **xhigh** | subagente papel `revisor` (só leitura) |
+
+- **Nunca use o `gpt-6-astra`** (modelo de fronteira, o mais caro), nem como assessor. O assessor do Codex é o mesmo Sol com raciocínio `xhigh`. Evite também o esforço `max` e o `ultra` (que delega sozinho e multiplica o consumo), salvo pedido explícito.
+- O Codex não tem flag de assessor. O equivalente são **papéis de subagente** (`multi_agent`, ligado por padrão): `[agents.<papel>]` com `description` e `config_file` apontando para um `.toml` que define `model`, `model_reasoning_effort` e `sandbox_mode`. O `instalar.sh` registra `explorador` e `revisor` no `~/.codex/config.toml` (camada do usuário) e copia os `.toml` para `~/.codex/agents/` (verificado no codex-cli 0.160.1).
+- O agente Codex chama os papéis pela ferramenta `spawn_agent` (`agent_type: explorador | revisor`). Para isso, **diga no prompt da tarefa** quando usá-los, nos mesmos momentos da seção 4.1: "explore com `explorador` em paralelo antes de editar; antes de concluir, peça a conferência ao `revisor`".
+- Recruta Codex no Maestri: `--preset "Codex" --command "codex -m gpt-6.1-sol -s workspace-write --add-dir <projeto>"` (o esforço `medium` vem do `config.toml`; se não vier, acrescente `-c model_reasoning_effort=medium`).
+- Modelos mudam: confira os disponíveis em `~/.codex/models_cache.json` e mantenha a regra "o mais recente Sol constrói e revisa, o mais recente Luna explora, nunca Astra".
+
+### 4.3 Ferramentas, em ordem de preferência
 1. **Canvas Maestri** (skills `maestri-manager`, `maestri`, `maestri-routines`, `maestri-workspace`, `maestri-portal`). Agentes visíveis e persistentes, notas compartilhadas, floors (git worktree), portais de navegador/dispositivo e rotinas.
 2. **Subagentes internos do Claude Code** (Haiku por padrão, seção 4.1). São o caminho de **exploração**: paralelos, só leitura, devolvem resumo.
 3. **O próprio maestro (Sonnet).** Não delegue o que você resolve em 1 ou 2 comandos: delegar também custa (inicialização e contexto).
 
-### 4.3 Recrutar
+### 4.4 Recrutar
 - Rode sempre `maestri list` antes e **reaproveite** quem já existe: o contexto dele já está pago.
 - Defina um **role** por função (escopo de pastas + o que pode e o que não pode fazer) e um **codinome** curto por agente.
 - **Sempre dê ao recruta o diretório do projeto** (`--add-dir <projeto>`; no Codex também `-s workspace-write`). Sem isso, o recruta fica preso na pasta do role.
 - Roles típicos: Dev Backend, Dev App/Front, Dev Testes (E2E), Revisor de Código (não edita), Designer UI/UX, Revisor de Design (não edita), Sentinela (Shell, sem modelo).
 
-### 4.4 Que modelo para cada campo
+### 4.5 Que modelo para cada campo
 Ajuste a tabela de `orquestracao.md` aos modelos disponíveis.
 | Campo | Primário | Alternativa | Esforço |
 |---|---|---|---|
-| Arquitetura, ADRs, integração, decisões | maestro (Sonnet) **+ assessor Opus** | GPT forte (2ª opinião) | médio; alto só se crítico |
-| Backend / algoritmos | GPT forte (Codex) | Sonnet | médio / alto |
-| Front / app / UI | Sonnet (+ Haiku para explorar) | GPT forte, Gemini | médio |
-| Análise de dados, SQL, relatórios | Sonnet | GPT leve | médio |
-| Testes, refatoração mecânica | GPT leve | Haiku | baixo / médio |
-| Revisão de código e segurança | família **oposta** à do autor (autor Claude → GPT; autor GPT → Sonnet + assessor Opus) | — | médio / alto |
-| Documentação, notas, resumos | Haiku | GPT leve | baixo |
-| Exploração: arquivos, código, documentação | subagentes Haiku em paralelo | — | baixo |
-| Plano, erro repetido, conferência final | assessor Opus (só nesses momentos) | GPT forte | — |
+| Arquitetura, ADRs, integração, decisões | maestro (Sonnet) **+ assessor Opus** | Codex `revisor` (Sol xhigh) como 2ª opinião | médio; alto só se crítico |
+| Backend / algoritmos | gpt-6.1-sol (+ `explorador`) | Sonnet | medium; high em algoritmo |
+| Front / app / UI | Sonnet (+ Haiku para explorar) | gpt-6.1-sol, Gemini | médio |
+| Análise de dados, SQL, relatórios | Sonnet | gpt-6-luna | médio |
+| Testes, refatoração mecânica | gpt-6-luna | Haiku | low / medium |
+| Revisão de código e segurança | família **oposta** à do autor (autor Claude → gpt-6.1-sol em high/xhigh; autor GPT → Sonnet + assessor Opus) | — | médio / alto |
+| Documentação, notas, resumos | Haiku | gpt-6-luna | baixo |
+| Exploração: arquivos, código, documentação | subagentes Haiku em paralelo | Codex `explorador` (Luna) | baixo |
+| Plano, erro repetido, conferência final | assessor Opus (só nesses momentos) | Codex `revisor` (Sol xhigh) | — |
+| Qualquer campo | **nunca `gpt-6-astra`** | — | — |
 
-### 4.5 Delegar bem
+### 4.6 Delegar bem
 - O prompt é curto e autocontido: objetivo, escopo de arquivos, restrições, critério de pronto e formato da resposta ("responda em até N linhas: arquivos alterados, testes, dúvidas").
 - Cite **só** as seções do brain necessárias (caminho + linhas), nunca "leia o brain".
 - Tarefas independentes vão em paralelo (`maestri ask --batch`). Tarefas que mexem nos mesmos arquivos vão em sequência ou em floors separados.
 - Contratos compartilhados (tipos, schemas) são escritos **antes** pelo maestro e só então distribuídos. Assim backend e front trabalham em paralelo sem colidir.
 - Achados de revisão vão para uma **nota do canvas** ("Revisao <área>") conectada ao autor, que marca cada item como `[corrigido]`, `[backlog]` ou `[não procede]`.
 
-### 4.6 Ciclo de entrega que funciona
+### 4.7 Ciclo de entrega que funciona
 exploração (Haiku) → plano → **revisão do plano (Opus)** → contrato → implementação em paralelo (Sonnet/Codex) → verificação do maestro (typecheck/testes) → revisão cruzada → correções → E2E → conferência visual (se houver UI) → **conferência final (Opus)** → commit da rodada → brain atualizado.
 
 ## 5. Economia de tokens
@@ -204,7 +218,7 @@ exploração (Haiku) → plano → **revisão do plano (Opus)** → contrato →
 - Prefira reaproveitar um recruta a criar outro, e recrutar a carregar tudo no contexto do maestro.
 - **O contexto do Opus é o mais caro: preserve-o.** Ele só recebe o essencial (o plano, o erro com as tentativas feitas, o diff final) e só nos momentos da seção 4.1. A sessão do dia a dia roda em Sonnet.
 - **Exploração em Haiku, não no contexto principal.** Ler muitos arquivos para achar uma coisa é trabalho de subagente: ele devolve `arquivo:linha` e um resumo, e o Sonnet lê só o trecho.
-- Implementação mecânica, testes e documentação vão para os modelos mais baratos (Haiku, GPT leve).
+- Implementação mecânica, testes e documentação vão para os modelos mais baratos (Haiku, gpt-6-luna). No Codex, `xhigh` só no `revisor`; nunca `gpt-6-astra`, `max` ou `ultra` por padrão.
 - Respostas dos agentes: concisas por contrato do prompt. Relatórios ao usuário: curtos, com o que foi feito, o que foi verificado e o que falta.
 - Skills com divulgação progressiva: um `SKILL.md` enxuto e os detalhes em `referencias/`, lidos só quando necessários.
 - Ao esperar um agente, use um laço de verificação com intervalo (ou um aviso de conclusão) em vez de checar a toda hora.
@@ -248,6 +262,7 @@ exploração (Haiku) → plano → **revisão do plano (Opus)** → contrato →
 
 ## 10. Lições operacionais (Maestri, Codex, Claude Code)
 - Antes de adotar dicas da internet sobre flags ou modelos, confira na versão instalada (`claude --help`, um teste com `-p`). Um exemplo: um post recomendava `claude --advisor opus --subagents haiku` com "Haiku 5.5". O `--advisor` existe; o `--subagents` não existe (use `CLAUDE_CODE_SUBAGENT_MODEL`), e o Haiku mais recente é o 4.5 (use o apelido `haiku`).
+- **Codex: o `.codex/config.toml` do projeto só é lido em projetos marcados como confiáveis.** Num teste, os papéis de subagente declarados nele foram ignorados (e o `spawn_agent` caiu no papel padrão). Por isso os papéis ficam na camada do usuário (`~/.codex/config.toml`, via `instalar.sh`). Para conferir qual modelo um subagente usou, veja a tabela `threads` (`agent_role`, `model`, `reasoning_effort`) em `~/.codex/state_5.sqlite`.
 - Prompts longos no Codex podem ficar parados na caixa de entrada. Depois do `ask`, confira com `maestri check` e, se preciso, envie Enter com `maestri ask "<Nome>" --raw "\n"`.
 - O sandbox do Codex não tem o CLI `maestri`. Para passar uma nota a ele, copie o conteúdo para um arquivo na pasta do role.
 - Aprovações de comandos do Codex fora do sandbox: aprove **uma vez** (`--raw "y"`), só depois de conferir o comando. Nunca escolha "não perguntar de novo".

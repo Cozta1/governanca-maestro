@@ -149,11 +149,14 @@ O Claude Code é o maestro: planeja, delega, revisa e integra. O `brain/` é a f
 | Claude | Sonnet | maestro e recrutas: dirige e constrói | `--preset "Claude Code" --command "claude --model sonnet --advisor opus --add-dir <projeto>"` |
 | Claude | Haiku | subagentes de exploração (paralelos, só leitura) | `CLAUDE_CODE_SUBAGENT_MODEL=haiku` (via `.claude/settings.json`) |
 | Claude | Opus | assessor (advisor): plano, erro repetido, conferência final | `--advisor opus` / `advisorModel` |
-| GPT (Codex) | <forte> | backend, revisão | `--preset "Codex" --command "codex -m <modelo> -s workspace-write --add-dir <projeto>"` |
-| GPT (Codex) | <leve> | testes, mecânico | idem, com o modelo leve |
+| GPT (Codex) | gpt-6.1-sol (medium) | dirige e constrói: backend, algoritmos | `--preset "Codex" --command "codex -m gpt-6.1-sol -s workspace-write --add-dir <projeto>"` |
+| GPT (Codex) | gpt-6-luna (low) | subagente `explorador`; testes e mecânico | papel `explorador` (`~/.codex/agents/explorador.toml`) |
+| GPT (Codex) | gpt-6.1-sol (xhigh) | subagente `revisor`: plano, erro repetido, conferência final | papel `revisor` (`~/.codex/agents/revisor.toml`) |
+| GPT (Codex) | ~~gpt-6-astra~~ | **não usar** | — |
 
-## Configuração base Claude
-Sonnet constrói, Haiku explora, Opus revisa (assessor). Configurado em `.claude/settings.json`; o Opus só entra para revisar planos, desbloquear erros repetidos e fazer a conferência final.
+## Configuração base Claude e Codex
+- Claude: Sonnet constrói, Haiku explora, Opus revisa (assessor). Configurado em `.claude/settings.json`; o Opus só entra para revisar planos, desbloquear erros repetidos e fazer a conferência final.
+- Codex: gpt-6.1-sol constrói, `explorador` (gpt-6-luna) explora, `revisor` (gpt-6.1-sol xhigh) revisa. Nunca gpt-6-astra. Os papéis vêm do `instalar.sh`; os prompts dizem quando chamá-los.
 
 ## Que modelo para cada campo
 <tabela campo → primário / alternativa / esforço>

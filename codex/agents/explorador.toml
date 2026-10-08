@@ -1,0 +1,4 @@
+# Subagente de exploração (equivalente ao Haiku): rápido, barato, só leitura.
+model = "gpt-6-luna"
+model_reasoning_effort = "low"
+sandbox_mode = "read-only"

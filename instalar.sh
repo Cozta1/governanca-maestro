@@ -1,5 +1,6 @@
 #!/bin/sh
-# Instala (ou atualiza) a skill governanca-maestro e o atalho no CLAUDE.md global.
+# Instala (ou atualiza) a skill governanca-maestro, o atalho no CLAUDE.md global
+# e os papéis de subagente do Codex (explorador e revisor) em ~/.codex.
 # Uso: sh instalar.sh   (no Windows, pelo Git Bash)
 set -e
 AQUI=$(cd "$(dirname "$0")" && pwd)
@@ -21,4 +22,32 @@ EOF
   echo "atalho adicionado em $GLOBAL"
 else
   echo "atalho já existe em $GLOBAL"
+fi
+
+# Papéis de subagente do Codex: Sol constrói, Luna explora, Sol xhigh revisa (nunca gpt-6-astra).
+CODEX="$HOME/.codex"
+if [ -d "$CODEX" ]; then
+  mkdir -p "$CODEX/agents"
+  cp "$AQUI/codex/agents/explorador.toml" "$AQUI/codex/agents/revisor.toml" "$CODEX/agents/"
+  CFG="$CODEX/config.toml"
+  if ! grep -q '^\[agents\.explorador\]' "$CFG" 2>/dev/null; then
+    [ -f "$CFG" ] && cp "$CFG" "$CFG.bak-governanca"
+    BASE=$(cd "$CODEX/agents" && (pwd -W 2>/dev/null || pwd))
+    {
+      echo ""
+      echo "# --- governanca-maestro: papéis de subagente (instalar.sh) ---"
+      echo "[agents.explorador]"
+      echo 'description = "Explora arquivos, codigo e documentacao em paralelo; so leitura; devolve arquivo:linha e resumo curto."'
+      echo "config_file = \"$BASE/explorador.toml\""
+      echo ""
+      echo "[agents.revisor]"
+      echo 'description = "Assessor: revisa planos, desbloqueia erros repetidos e faz a conferencia final antes de concluir; so leitura."'
+      echo "config_file = \"$BASE/revisor.toml\""
+    } >> "$CFG"
+    echo "papéis explorador/revisor adicionados em $CFG (backup: $CFG.bak-governanca)"
+  else
+    echo "papéis do Codex já existem em $CFG (arquivos .toml atualizados)"
+  fi
+else
+  echo "Codex não encontrado (~/.codex); papéis de subagente ignorados"
 fi
