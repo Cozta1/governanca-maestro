@@ -17,7 +17,9 @@ Vamos criar um projeto novo do zero nesta pasta vazia, com a governança da skil
 
 ## Passo 0: garantir a skill
 1. Se a skill `governanca-maestro` estiver disponível, invoque-a e siga a seção 11 (Bootstrap).
-2. Se não estiver, instale-a a partir do repositório `C:/Users/zkozt/Projetos/governanca-maestro` (`cp -r governanca-maestro ~/.claude/skills/`), leia o `SKILL.md` de lá e siga a mesma seção.
+2. Se não estiver, instale-a a partir do GitHub e siga a mesma seção do `SKILL.md`:
+   `git clone https://github.com/Cozta1/governanca-maestro.git <pasta temporária>` e depois `cp -r <pasta temporária>/governanca-maestro ~/.claude/skills/`.
+   O repositório é privado: se o clone pedir login, me peça para autenticar com `! git clone ...` em vez de trocar de configuração.
 Leia só as seções de `referencias/modelos.md` que for usar.
 
 ## Passo 1: entrevista curta (uma rodada só)
