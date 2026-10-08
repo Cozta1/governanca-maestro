@@ -20,7 +20,7 @@ O usuário autorizou agendar **qualquer ação necessária**: extrações fora d
 | Antigravity/Gemini | "quota exceeded", "RESOURCE_EXHAUSTED", HTTP 429 |
 | Sentinela | mensagem "Sentinela de uso: ..." (75% ou desequilíbrio de 35 pontos ou mais) |
 
-Leia a saída dos recrutas com `maestri check "<Nome>"`. Se o aviso disser o horário de reset, use esse horário. `uso.py status` mostra os resets do Codex (exatos) e do Claude (estimado).
+Leia a saída dos recrutas com `maestri check "<Nome>"`. Se o aviso disser o horário de reset, use esse horário. `uso.py status` mostra os resets exatos do Codex e do Claude (janela e semana).
 
 ## 2. Antes de agendar: realocar, se der
 Se outro modelo **disponível** pode fazer a tarefa (ver a tabela de modelos em `brain/orquestracao.md`), delegue a ele agora em vez de esperar. Por exemplo, com o Codex no limite, a revisão vai para um subagente Claude ou para um recruta Antigravity. Só agende quando ninguém adequado estiver livre ou quando a tarefa exigir aquele modelo.

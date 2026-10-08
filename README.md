@@ -25,7 +25,7 @@ governanca-maestro/
 │   └── agendar-retomada/    # checkpoint + rotina depois do limite, rede de segurança
 └── scripts/
     ├── grafo.py             # busca em grafo no brain/ (Python 3, sem dependências)
-    └── uso.py               # limites de uso Claude (estimado) × Codex (exato)
+    └── uso.py               # limites de uso Claude × Codex (exatos, janela e semana)
 ```
 
 ## Instalar (uma vez por máquina)

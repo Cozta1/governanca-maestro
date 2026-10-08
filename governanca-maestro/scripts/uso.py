@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Monitor de limites de uso: Codex (exato, dos logs) e Claude (estimado e calibrado).
+"""Monitor de limites de uso: Codex (exato, dos logs) e Claude (exato pela API de uso da Anthropic,
+a mesma do /usage; estimado e calibrado só se a API falhar).
 
 Codex grava `rate_limits` (used_percent, resets_at) nos rollouts em ~/.codex/sessions.
 Claude só grava tokens por mensagem e o registro `quotaLimits` quando um limite estoura (429);
@@ -21,6 +22,7 @@ import os
 import subprocess
 import sys
 import time
+import urllib.request
 from datetime import datetime, timedelta, timezone
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -109,6 +111,8 @@ def buscar_chave(obj, chave):
 def iso(ts):
     if ts is None:
         return None
+    if isinstance(ts, str) and not ts.replace(".", "", 1).isdigit():
+        return datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M")
     return datetime.fromtimestamp(float(ts), timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
 
 
@@ -153,7 +157,31 @@ def blocos(eventos):
     return res
 
 
+def uso_claude_exato():
+    """Mesma fonte do /usage do Claude Code: API de uso da Anthropic com o login OAuth local.
+    O token só vai para api.anthropic.com. Devolve None se não houver login ou a API falhar."""
+    try:
+        cred = json.load(open(os.path.join(CASA, ".claude", ".credentials.json"), encoding="utf-8"))
+        tok = cred["claudeAiOauth"]["accessToken"]
+        req = urllib.request.Request("https://api.anthropic.com/api/oauth/usage", headers={
+            "Authorization": "Bearer " + tok, "anthropic-beta": "oauth-2025-04-20", "User-Agent": "claude-code"})
+        d = json.load(urllib.request.urlopen(req, timeout=15))
+        h, s = d["five_hour"], d["seven_day"]
+        return {
+            "fonte": "exato",
+            "janela5h_pct": round(float(h["utilization"]), 1),
+            "janela5h_reset": iso(h.get("resets_at")),
+            "semana_pct": round(float(s["utilization"]), 1),
+            "semana_reset": iso(s.get("resets_at")),
+        }
+    except Exception:
+        return None
+
+
 def uso_claude():
+    exato = uso_claude_exato()
+    if exato:
+        return exato
     eventos, rejeicoes = eventos_claude(agora() - timedelta(days=8))
     bl = blocos(eventos)
     atual = bl[-1] if bl and agora() < bl[-1]["inicio"] + JANELA else None
@@ -177,9 +205,15 @@ def uso_claude():
 
 # ---------------- Resumo e alertas ----------------
 
+def pressao(f):
+    """Maior percentual entre a janela de 5 h e a semana (o que acabar primeiro manda)."""
+    v = [f.get(k) for k in ("janela5h_pct", "semana_pct") if f.get(k) is not None]
+    return max(v) if v else None
+
+
 def resumo():
     c, x = uso_claude(), uso_codex()
-    pc, px = c.get("janela5h_pct"), x.get("janela5h_pct")
+    pc, px = pressao(c), pressao(x)
     if pc is None or px is None:
         rec = "codex" if (px is not None and px < 60) else "indefinido"
     else:
@@ -193,10 +227,11 @@ def alertas(r, limite):
         pct = r[nome].get("janela5h_pct")
         if pct is not None and pct >= limite:
             out.append(f"{nome} em {pct}% da janela de 5 h (reset {r[nome].get('janela5h_reset')})")
-    sem = r["codex"].get("semana_pct")
-    if sem is not None and sem >= limite:
-        out.append(f"codex em {sem}% do limite semanal (reset {r['codex'].get('semana_reset')})")
-    pc, px = r["claude"].get("janela5h_pct"), r["codex"].get("janela5h_pct")
+    for nome in ("claude", "codex"):
+        sem = r[nome].get("semana_pct")
+        if sem is not None and sem >= limite:
+            out.append(f"{nome} em {sem}% do limite semanal (reset {r[nome].get('semana_reset')})")
+    pc, px = pressao(r["claude"]), pressao(r["codex"])
     if pc is not None and px is not None and abs(pc - px) >= 35:
         out.append(f"uso desequilibrado (claude {pc}% x codex {px}%): preferir {r['preferir']}")
     return out
@@ -204,8 +239,12 @@ def alertas(r, limite):
 
 def texto(r):
     c, x = r["claude"], r["codex"]
-    lc = (f"Claude 5h: {c['janela5h_pct']}% (estimado; reset {c['janela5h_reset']})" if c["janela5h_pct"] is not None
-          else f"Claude 5h: consumo {c['janela5h_consumo']} (sem calibração)")
+    if c.get("fonte") == "exato":
+        lc = f"Claude 5h: {c['janela5h_pct']}% (reset {c['janela5h_reset']}) | semana: {c['semana_pct']}% (reset {c['semana_reset']})"
+    elif c["janela5h_pct"] is not None:
+        lc = f"Claude 5h: {c['janela5h_pct']}% (estimado; reset {c['janela5h_reset']})"
+    else:
+        lc = f"Claude 5h: consumo {c['janela5h_consumo']} (sem calibração)"
     lx = (f"Codex 5h: {x['janela5h_pct']}% (reset {x['janela5h_reset']}) | semana: {x['semana_pct']}% (reset {x['semana_reset']})"
           if x.get("janela5h_pct") is not None else "Codex: indisponível")
     return f"[{r['gerado_em']}] {lc} | {lx} | preferir: {r['preferir']}"

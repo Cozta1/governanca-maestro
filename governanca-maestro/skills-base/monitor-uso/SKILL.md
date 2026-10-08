@@ -1,6 +1,6 @@
 ---
 name: monitor-uso
-description: Consulta os limites de uso do Claude (estimado e calibrado) e do Codex (exato) para decidir para qual família de modelo delegar e evitar paradas forçadas. Use antes de distribuir tarefas, quando o Sentinela avisar, ou quando o usuário perguntar sobre limites e equilíbrio de uso.
+description: Consulta os limites de uso do Claude e do Codex (ambos exatos: janela de 5 h e semana) para decidir para qual família de modelo delegar e evitar paradas forçadas. Use antes de distribuir tarefas, quando o Sentinela avisar, ou quando o usuário perguntar sobre limites e equilíbrio de uso.
 ---
 
 # monitor-uso: limites de uso e equilíbrio Claude × Codex
@@ -10,7 +10,7 @@ Script: `python .claude/skills/monitor-uso/uso.py <status|json|vigiar>`
 | Família | Fonte | Precisão |
 |---|---|---|
 | Codex | `rate_limits` nos rollouts de `~/.codex/sessions` (janela de 5 h e semanal, com horário de reset) | exata |
-| Claude | tokens ponderados por custo em `~/.claude/projects/*/*.jsonl`, agrupados em blocos de 5 h. O teto é calibrado pela última rejeição 429 (`quotaLimits.rateLimitType = five_hour`) | estimada (±) |
+| Claude | API de uso da Anthropic (`/api/oauth/usage`, a mesma do `/usage`) com o login OAuth local; o token só vai para api.anthropic.com. Reserva, se a API falhar: tokens ponderados em `~/.claude/projects/*/*.jsonl` calibrados pela última rejeição 429 | exata (janela de 5 h e semana) |
 
 As duas medições valem para a **conta inteira** (todos os projetos), não só para este.
 A saída recomenda `preferir: codex|claude|equilibrado`, conforme qual família tem mais folga (diferença maior que 10 pontos).

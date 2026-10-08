@@ -9,7 +9,7 @@ Esta skill não trata do conteúdo de nenhum projeto. Ela define **como** um pro
 
 Arquivos desta skill:
 - `scripts/grafo.py`: busca em grafo no `brain/`. Python 3 puro, sem dependências.
-- `scripts/uso.py`: limites de uso do Claude (estimado) e do Codex (exato).
+- `scripts/uso.py`: limites de uso do Claude e do Codex (exatos: janela de 5 h e semana).
 - `referencias/modelos.md`: modelos prontos de cada arquivo (CLAUDE.md, notas, skills, hook). Leia só a seção que for usar.
 - `referencias/planejamento.md`: roteiro da entrevista de planejamento e formato do plano (seção 12).
 
@@ -172,7 +172,7 @@ Ou, de forma fixa por projeto, em `.claude/settings.json` (o bootstrap cria esse
 - **Nunca use o `gpt-6-astra`** (modelo de fronteira, o mais caro), nem como assessor. O assessor do Codex é o mesmo Sol com raciocínio `xhigh`. Evite também o esforço `max` e o `ultra` (que delega sozinho e multiplica o consumo), salvo pedido explícito.
 - O Codex não tem flag de assessor. O equivalente são **papéis de subagente** (`multi_agent`, ligado por padrão): `[agents.<papel>]` com `description` e `config_file` apontando para um `.toml` que define `model`, `model_reasoning_effort` e `sandbox_mode`. O `instalar.sh` registra `explorador` e `revisor` no `~/.codex/config.toml` (camada do usuário) e copia os `.toml` para `~/.codex/agents/` (verificado no codex-cli 0.160.1).
 - O agente Codex chama os papéis pela ferramenta `spawn_agent` (`agent_type: explorador | revisor`). Para isso, **diga no prompt da tarefa** quando usá-los, nos mesmos momentos da seção 4.1: "explore com `explorador` em paralelo antes de editar; antes de concluir, peça a conferência ao `revisor`".
-- Recruta Codex no Maestri: `--preset "Codex" --command "codex -m gpt-6.1-sol -s workspace-write --add-dir <projeto>"` (o esforço `medium` vem do `config.toml`; se não vier, acrescente `-c model_reasoning_effort=medium`).
+- Recruta Codex no Maestri: `--preset "Codex" --command "codex -m gpt-6.1-sol -s workspace-write --add-dir <projeto>"` (no Windows, acrescente `-c windows.sandbox=unelevated`; ver seção 10) (o esforço `medium` vem do `config.toml`; se não vier, acrescente `-c model_reasoning_effort=medium`).
 - Modelos mudam: confira os disponíveis em `~/.codex/models_cache.json` e mantenha a regra "o mais recente Sol constrói e revisa, o mais recente Luna explora, nunca Astra".
 
 ### 4.3 Ferramentas, em ordem de preferência
@@ -274,6 +274,8 @@ Skills: `monitor-uso` e `agendar-retomada` (arquivos completos em `skills-base/`
 - Aprovações de comandos do Codex fora do sandbox: aprove **uma vez** (`--raw "y"`), só depois de conferir o comando. Nunca escolha "não perguntar de novo".
 - Terminais Windows/PowerShell: evite aspas aninhadas no `--command` e use `.cmd` em vez de `.ps1` para CLIs npm.
 - As cotas são compartilhadas entre o maestro e os recrutas da mesma família.
+- **Uso do Claude é exato**: `uso.py` lê a API de uso da Anthropic (a mesma do `/usage`) com o login local; a estimativa por blocos de mensagens errava muito (mostrou 1% com 21% reais) e não via o semanal. O equilíbrio usa o maior entre janela e semana de cada família.
+- **Codex no Windows**: com `[windows] sandbox = "elevated"`, a versão 0.162 falha em todo comando (`helper_unknown_error: setup refresh had errors`) e pede aprovação para tudo; não depende do modelo. Recrute com `-c windows.sandbox=unelevated`. O Codex também se autoatualiza ao abrir e sai: reinicie com `maestri recruit --replace`.
 - Processos em segundo plano do maestro (servidores) param no tempo limite; para servidores de dev, use o máximo.
 - Revisão visual: confira o DOM e a tela realmente servidos, não só o código (caches de bundler enganam).
 
