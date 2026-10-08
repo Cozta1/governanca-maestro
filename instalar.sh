@@ -51,3 +51,10 @@ if [ -d "$CODEX" ]; then
 else
   echo "Codex não encontrado (~/.codex); papéis de subagente ignorados"
 fi
+
+# Papel global "Maestro Governanca" no Maestri (só funciona num terminal em Modo Maestro).
+if command -v maestri >/dev/null 2>&1 || [ -n "$MAESTRI_CLI" ]; then
+  sh "$AQUI/maestri/criar-papel.sh" || echo "papel do Maestri não criado (rode sh maestri/criar-papel.sh num terminal em Modo Maestro)"
+else
+  echo "Maestri não detectado; para o agente global, rode sh maestri/criar-papel.sh dentro do Maestri"
+fi
