@@ -58,3 +58,16 @@ if command -v maestri >/dev/null 2>&1 || [ -n "$MAESTRI_CLI" ]; then
 else
   echo "Maestri não detectado; para o agente global, rode sh maestri/criar-papel.sh dentro do Maestri"
 fi
+
+# Antigravity CLI (agy): o instalador dele não põe ~/.gemini/bin no PATH. Só avisa; não altera o PATH.
+AGYDIR="$HOME/.gemini/bin"
+if ls "$AGYDIR"/agy* >/dev/null 2>&1; then
+  if command -v agy >/dev/null 2>&1; then
+    echo "Antigravity (agy) encontrado no PATH"
+  else
+    echo "AVISO: o agy existe em $AGYDIR mas não está no PATH (o Maestri mostrará \"CLI não encontrada\")."
+    echo "  Windows (PowerShell): [Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ';' + \"\$env:USERPROFILE\\.gemini\\bin\", 'User')"
+    echo "  Depois reinicie o Maestri. (\`agy install\` também configura, mas mexe em aliases do perfil.)"
+    echo "  Linux/macOS: export PATH=\"\$PATH:$AGYDIR\" no perfil do shell."
+  fi
+fi

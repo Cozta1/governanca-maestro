@@ -21,11 +21,12 @@ governanca-maestro/
 │   ├── modelos.md           # CLAUDE.md, notas do brain, skills-base, hook
 │   └── planejamento.md      # roteiro da entrevista e formato do plano
 ├── skills-base/             # skills de gasto completas, copiadas para cada projeto
-│   ├── monitor-uso/         # limites Claude × Codex, equilíbrio e Sentinela
-│   └── agendar-retomada/    # checkpoint + rotina depois do limite, rede de segurança
+│   ├── monitor-uso/         # limites Claude × Codex × Gemini, equilíbrio e Sentinela
+│   ├── agendar-retomada/    # checkpoint + rotina depois do limite, rede de segurança
+│   └── vigia-recrutas/      # aprova comandos seguros dos recrutas Codex e Antigravity (vigia.sh)
 └── scripts/
     ├── grafo.py             # busca em grafo no brain/ (Python 3, sem dependências)
-    └── uso.py               # limites de uso Claude × Codex (exatos, janela e semana)
+    └── uso.py               # limites de uso Claude × Codex × Gemini (exatos) e `uso.py sentinela`
 ```
 
 ## Instalar (uma vez por máquina)
@@ -38,7 +39,9 @@ O script:
 - adiciona ao `~/.claude/CLAUDE.md` um atalho que vale em todas as sessões;
 - registra no `~/.codex/config.toml` os papéis de subagente `explorador` e `revisor`, com backup do arquivo antes.
 
-Modelos usados: no Claude, Sonnet constrói, Haiku explora e Opus revisa. No Codex, gpt-6.1-sol constrói, gpt-6-luna explora e gpt-6.1-sol em xhigh revisa. O gpt-6-astra nunca é usado.
+Modelos usados: no Claude, Sonnet constrói, Haiku explora e Opus revisa. No Codex, gpt-6.1-sol constrói, gpt-6-luna explora e gpt-6.1-sol em xhigh revisa. O gpt-6-astra nunca é usado. No Gemini (Antigravity CLI `agy`, que substituiu o Gemini CLI), gemini-3.8-flash-high constrói, gemini-3.8-flash-low explora e gemini-3.1-pro-high revisa.
+
+No Windows, o `agy.exe` fica em `~/.gemini/bin` e não entra no PATH sozinho: acrescente o diretório ao PATH do usuário e reinicie o Maestri (o `instalar.sh` avisa, sem alterar o PATH).
 
 ## Usar
 Numa pasta vazia (ou num projeto existente), mande:
@@ -52,7 +55,7 @@ Um papel global, visível em todos os workspaces, que segue esta metodologia. Ao
 1. verifica e instala a skill;
 2. diagnostica a pasta: vazia, com código ou já governada;
 3. monta a estrutura base sem perguntas;
-4. sobe o **Sentinela** (terminal Shell, sem custo de modelo) que vigia o gasto Claude × Codex e avisa o maestro em 75% ou em desequilíbrio;
+4. sobe o **Sentinela** (terminal Shell, sem custo de modelo) com um comando, `python <projeto>/.claude/skills/monitor-uso/uso.py sentinela`: ele vigia o gasto Claude × Codex × Gemini, mostra um painel com barras coloridas por família e avisa o maestro em 75% ou em desequilíbrio;
 5. entra direto no planejamento, perguntando tudo o que precisa para entender o projeto;
 6. pede aprovação do plano e só então monta o time e executa, distribuindo as tarefas pela família com mais folga.
 
