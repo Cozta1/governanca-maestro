@@ -1,6 +1,6 @@
 ---
 name: monitor-uso
-description: Consulta os limites de uso do Claude e do Codex (ambos exatos: janela de 5 h e semana) para decidir para qual família de modelo delegar e evitar paradas forçadas. Use antes de distribuir tarefas, quando o Sentinela avisar, ou quando o usuário perguntar sobre limites e equilíbrio de uso.
+description: Consulta os limites de uso do Claude, do Codex e do Gemini via Antigravity (exatos: janela de 5 h e semana) para decidir para qual família de modelo delegar e evitar paradas forçadas. Use antes de distribuir tarefas, quando o Sentinela avisar, ou quando o usuário perguntar sobre limites e equilíbrio de uso.
 ---
 
 # monitor-uso: limites de uso e equilíbrio Claude × Codex

@@ -73,6 +73,9 @@ def uso_codex():
                 payload = reg.get("payload") or {}
                 rl = payload.get("rate_limits") if payload.get("type") == "token_count" else None
                 ts = reg.get("timestamp")
+                # Evento sem `resets_at` na janela de 5 h (comum quando o limite já estourou) não informa o uso.
+                if rl and not (rl.get("primary") or {}).get("resets_at"):
+                    continue
                 if rl and ts and (melhor is None or ts > melhor[0]):
                     melhor = (ts, rl)
     if not melhor:
@@ -114,6 +117,56 @@ def iso(ts):
     if isinstance(ts, str) and not ts.replace(".", "", 1).isdigit():
         return datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M")
     return datetime.fromtimestamp(float(ts), timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
+
+
+# ---------------- Antigravity (Gemini) ----------------
+
+AGY = os.environ.get("AGY_CLI") or os.path.join(CASA, ".gemini", "bin", "agy.exe" if os.name == "nt" else "agy")
+CACHE_CLAUDE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache-claude.json")
+CACHE_AGY = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".cache-antigravity.json")
+
+
+def uso_antigravity(validade=600):
+    """Cotas do Antigravity pelo comando oficial `agy -p /usage` (o mesmo que o Maestri usa).
+
+    O comando é uma consulta local de cota, sem chamada ao modelo; ainda assim fica em cache por 10 min.
+    Devolve só o grupo "Gemini Models" (o que os recrutas Gemini consomem).
+    """
+    try:
+        with open(CACHE_AGY, encoding="utf-8") as f:
+            c = json.load(f)
+        if time.time() - c.get("_lido", 0) < validade:
+            return c["dados"]
+    except (OSError, ValueError, KeyError):
+        pass
+    if not os.path.exists(AGY):
+        return {"fonte": "indisponivel"}
+    try:
+        env = dict(os.environ, MSYS_NO_PATHCONV="1")
+        out = subprocess.run([AGY, "-p", "/usage", "--output-format", "json"], capture_output=True,
+                             text=True, encoding="utf-8", errors="ignore", timeout=90, cwd=CASA, env=env).stdout
+        d = json.loads(out)
+        grupos = d["command"]["data"]["groups"]
+    except Exception:
+        return {"fonte": "indisponivel"}
+    g = next((g for g in grupos if "gemini" in g.get("name", "").lower()), grupos[0] if grupos else None)
+    if not g:
+        return {"fonte": "indisponivel"}
+    jan = {b.get("window"): b for b in g.get("buckets", [])}
+    pct = lambda b: round(100 * (1 - float(b.get("remaining_fraction", 1))), 1) if b else None
+    dados = {
+        "fonte": "exato",
+        "janela5h_pct": pct(jan.get("5h")),
+        "janela5h_reset": iso((jan.get("5h") or {}).get("reset_time")),
+        "semana_pct": pct(jan.get("weekly")),
+        "semana_reset": iso((jan.get("weekly") or {}).get("reset_time")),
+    }
+    try:
+        with open(CACHE_AGY, "w", encoding="utf-8") as f:
+            json.dump({"_lido": time.time(), "dados": dados}, f)
+    except OSError:
+        pass
+    return dados
 
 
 # ---------------- Claude ----------------
@@ -167,14 +220,25 @@ def uso_claude_exato():
             "Authorization": "Bearer " + tok, "anthropic-beta": "oauth-2025-04-20", "User-Agent": "claude-code"})
         d = json.load(urllib.request.urlopen(req, timeout=15))
         h, s = d["five_hour"], d["seven_day"]
-        return {
+        dados = {
             "fonte": "exato",
             "janela5h_pct": round(float(h["utilization"]), 1),
             "janela5h_reset": iso(h.get("resets_at")),
             "semana_pct": round(float(s["utilization"]), 1),
             "semana_reset": iso(s.get("resets_at")),
         }
+        with open(CACHE_CLAUDE, "w", encoding="utf-8") as f:
+            json.dump({"_lido": time.time(), "dados": dados}, f)
+        return dados
     except Exception:
+        # API fora do ar ou limitando: usa a última leitura exata de até 15 min.
+        try:
+            with open(CACHE_CLAUDE, encoding="utf-8") as f:
+                c = json.load(f)
+            if time.time() - c.get("_lido", 0) < 900:
+                return c["dados"]
+        except (OSError, ValueError, KeyError):
+            pass
         return None
 
 
@@ -212,28 +276,35 @@ def pressao(f):
 
 
 def resumo():
-    c, x = uso_claude(), uso_codex()
+    c, x, g = uso_claude(), uso_codex(), uso_antigravity()
     pc, px = pressao(c), pressao(x)
     if pc is None or px is None:
         rec = "codex" if (px is not None and px < 60) else "indefinido"
     else:
         rec = "codex" if px + 10 < pc else ("claude" if pc + 10 < px else "equilibrado")
-    return {"gerado_em": agora().astimezone().strftime("%Y-%m-%d %H:%M"), "claude": c, "codex": x, "preferir": rec}
+    familias = {"claude": pc, "codex": px, "gemini": pressao(g)}
+    validas = {k: v for k, v in familias.items() if v is not None}
+    if validas:
+        menor = min(validas, key=validas.get)
+        resto = [v for k, v in validas.items() if k != menor]
+        rec = menor if resto and min(resto) - validas[menor] >= 10 else "equilibrado"
+    return {"gerado_em": agora().astimezone().strftime("%Y-%m-%d %H:%M"), "claude": c, "codex": x, "gemini": g, "preferir": rec}
 
 
 def alertas(r, limite):
     out = []
-    for nome in ("claude", "codex"):
+    for nome in ("claude", "codex", "gemini"):
         pct = r[nome].get("janela5h_pct")
         if pct is not None and pct >= limite:
             out.append(f"{nome} em {pct}% da janela de 5 h (reset {r[nome].get('janela5h_reset')})")
-    for nome in ("claude", "codex"):
+    for nome in ("claude", "codex", "gemini"):
         sem = r[nome].get("semana_pct")
         if sem is not None and sem >= limite:
             out.append(f"{nome} em {sem}% do limite semanal (reset {r[nome].get('semana_reset')})")
-    pc, px = pressao(r["claude"]), pressao(r["codex"])
-    if pc is not None and px is not None and abs(pc - px) >= 35:
-        out.append(f"uso desequilibrado (claude {pc}% x codex {px}%): preferir {r['preferir']}")
+    ps = {k: pressao(r[k]) for k in ("claude", "codex", "gemini") if pressao(r[k]) is not None}
+    if len(ps) >= 2 and max(ps.values()) - min(ps.values()) >= 35:
+        desc = " x ".join(f"{k} {v}%" for k, v in ps.items())
+        out.append(f"uso desequilibrado ({desc}): preferir {r['preferir']}")
     return out
 
 
@@ -247,7 +318,10 @@ def texto(r):
         lc = f"Claude 5h: consumo {c['janela5h_consumo']} (sem calibração)"
     lx = (f"Codex 5h: {x['janela5h_pct']}% (reset {x['janela5h_reset']}) | semana: {x['semana_pct']}% (reset {x['semana_reset']})"
           if x.get("janela5h_pct") is not None else "Codex: indisponível")
-    return f"[{r['gerado_em']}] {lc} | {lx} | preferir: {r['preferir']}"
+    g = r.get("gemini") or {}
+    lg = (f"Gemini 5h: {g['janela5h_pct']}% (reset {g['janela5h_reset']}) | semana: {g['semana_pct']}% (reset {g['semana_reset']})"
+          if g.get("janela5h_pct") is not None else "Gemini: indisponível")
+    return f"[{r['gerado_em']}] {lc} | {lx} | {lg} | preferir: {r['preferir']}"
 
 
 def avisar(alvo, msg):
@@ -267,13 +341,44 @@ def alvo_padrao():
         return "Claude Code Maestro"
 
 
+COR = {"ok": "\033[32m", "atencao": "\033[33m", "alto": "\033[31m", "fim": "\033[0m", "neg": "\033[1m", "fraco": "\033[2m"}
+
+
+def barra(pct, largura=20):
+    if pct is None:
+        return COR["fraco"] + "·" * largura + COR["fim"] + "   --"
+    cheio = min(largura, round(largura * pct / 100))
+    cor = COR["ok"] if pct < 50 else COR["atencao"] if pct < 75 else COR["alto"]
+    return f"{cor}{'█' * cheio}{COR['fraco']}{'░' * (largura - cheio)}{COR['fim']} {cor}{pct:5.1f}%{COR['fim']}"
+
+
+def hora(reset):
+    return f"{reset[8:10]}/{reset[5:7]} {reset[11:16]}" if reset else "--"
+
+
+def painel(r, limite, avisos):
+    linhas = [f"{COR['neg']}SENTINELA DE USO{COR['fim']}  {r['gerado_em']}   limite de alerta {limite:.0f}%   "
+              f"preferir: {COR['neg']}{r['preferir']}{COR['fim']}", ""]
+    linhas.append(f"{'':8}{'janela 5 h':<28}{'reinicia':<14}{'semana':<28}{'reinicia'}")
+    for nome, rot in (("claude", "Claude"), ("codex", "Codex"), ("gemini", "Gemini")):
+        f = r.get(nome) or {}
+        linhas.append(f"{rot:<8}{barra(f.get('janela5h_pct'))}  {hora(f.get('janela5h_reset')):<12}"
+                      f"{barra(f.get('semana_pct'))}  {hora(f.get('semana_reset'))}")
+    linhas.append("")
+    linhas.append(f"{COR['fraco']}Últimos alertas:{COR['fim']}" if avisos else f"{COR['fraco']}Sem alertas.{COR['fim']}")
+    linhas += [f"  {a}" for a in avisos[-5:]]
+    return "\n".join(linhas)
+
+
 def vigiar(intervalo, limite, alvo):
     alvo = alvo or alvo_padrao()
     print(f"Sentinela: avisando '{alvo}' (limite {limite}%, a cada {intervalo} s)", flush=True)
     ja_avisado = set()
+    historico = []
+    if os.name == "nt":
+        os.system("")  # liga as sequências ANSI no console do Windows
     while True:
         r = resumo()
-        print(texto(r), flush=True)
         atuais = alertas(r, limite)
         # Chave sem o percentual: avisa uma vez por tipo de alerta até a situação normalizar.
         chave = lambda a: " ".join(a.split()[:2]) + (" semanal" if "semanal" in a else "")
@@ -281,6 +386,8 @@ def vigiar(intervalo, limite, alvo):
         if novos:
             avisar(alvo, "Sentinela de uso: " + "; ".join(novos) + ". Siga a skill agendar-retomada e a regra de equilibrio de brain/orquestracao.md. Status: " + texto(r))
             ja_avisado |= {chave(a) for a in novos}
+            historico += [f"{r['gerado_em'][11:]} {a}" for a in novos]
+        print("\033[2J\033[H" + painel(r, limite, historico) + f"\n\n{COR['fraco']}Avisando '{alvo}' a cada {intervalo} s.{COR['fim']}", flush=True)
         # Esquece alertas que voltaram ao normal (ex.: reset da janela).
         ja_avisado &= {chave(a) for a in atuais}
         time.sleep(intervalo)
