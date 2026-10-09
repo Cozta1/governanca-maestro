@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
-"""Monitor de limites de uso: Codex (exato, dos logs) e Claude (exato pela API de uso da Anthropic,
-a mesma do /usage; estimado e calibrado só se a API falhar).
+"""Monitor de limites de uso das três famílias: Codex (exato, dos logs), Claude (exato pela API de uso
+da Anthropic, a mesma do /usage; estimado e calibrado só se a API falhar) e Gemini (exato, pelo
+comando `agy -p /usage` do Antigravity).
 
 Codex grava `rate_limits` (used_percent, resets_at) nos rollouts em ~/.codex/sessions.
 Claude só grava tokens por mensagem e o registro `quotaLimits` quando um limite estoura (429);
 a estimativa soma o consumo ponderado da janela de 5 h atual e divide pelo consumo que causou
 a última rejeição registrada (calibração). Sem rejeição registrada, mostra só o consumo.
+As três famílias entram nos alertas e na recomendação `preferir: claude|codex|gemini|equilibrado`.
 
 Uso:
   uso.py status                     # resumo legível
   uso.py json                       # resumo em JSON
   uso.py vigiar [--intervalo 120] [--limite 75] [--avisar "<terminal do maestro>"]
+  uso.py sentinela [--intervalo 120] [--limite 75]   # cria/recria o terminal Sentinela no Maestri
+
+O painel do `vigiar` mostra barras coloridas por família (verde < 50%, amarelo < 75%, vermelho >= 75%),
+horários de reinício em dd/mm e os últimos alertas.
 
 Sem --avisar, o vigia avisa o terminal escrito em sentinela-alvo.txt (ao lado deste script),
 ou "Claude Code Maestro" se o arquivo não existir. Assim o comando do Sentinela não precisa de aspas.
+O subcomando `sentinela` descobre o terminal do maestro (linha após "You:" em `maestri list`),
+grava sentinela-alvo.txt e recruta (ou recria, com --replace) o terminal "Sentinela" já com o `vigiar`.
 """
 import argparse
 import glob
@@ -393,6 +401,35 @@ def vigiar(intervalo, limite, alvo):
         time.sleep(intervalo)
 
 
+def sentinela(intervalo, limite):
+    """Cria (ou recria) o terminal Sentinela no Maestri, já apontado para o terminal do maestro."""
+    import re
+    cli = os.environ.get("MAESTRI_CLI") or "maestri"
+    try:
+        lista = subprocess.run([cli, "list"], capture_output=True, text=True, encoding="utf-8",
+                               errors="ignore", timeout=30).stdout
+    except Exception as e:
+        sys.exit(f"não consegui rodar '{cli} list' (defina MAESTRI_CLI com o caminho do maestri): {e}")
+    m = re.search(r'You:\s*\n\s*-\s*name:\s*"([^"]+)"', lista)
+    if not m:
+        sys.exit("não achei o terminal do maestro (linha após 'You:' em maestri list); precisa estar no Modo Maestro")
+    maestro = m.group(1)
+    aqui = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(aqui, "sentinela-alvo.txt"), "w", encoding="utf-8") as f:
+        f.write(maestro)
+    script = os.path.abspath(__file__).replace("\\", "/")
+    # Sem aspas internas: o terminal do Sentinela é PowerShell. Nome com espaço fica só no sentinela-alvo.txt.
+    cmd = f"python {script} vigiar --intervalo {intervalo} --limite {limite:g}" + ("" if " " in maestro else f" --avisar {maestro}")
+    existe = re.search(r'name:\s*"Sentinela"', lista) is not None
+    args = [cli, "recruit", "--preset", "Shell", "--command", cmd, "--replace", "Sentinela"] if existe \
+        else [cli, "recruit", "Sentinela", "--preset", "Shell", "--command", cmd]
+    r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=60)
+    if r.returncode != 0:
+        sys.exit(f"falha ao recrutar o Sentinela: {(r.stderr or r.stdout).strip()}")
+    print(f"Sentinela {'recriado' if existe else 'criado'}: avisa '{maestro}' (limite {limite:g}%, a cada {intervalo} s). "
+          f"Confira com: maestri check \"Sentinela\"")
+
+
 def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -402,11 +439,16 @@ def main():
     v.add_argument("--intervalo", type=int, default=120)
     v.add_argument("--limite", type=float, default=75)
     v.add_argument("--avisar", default=None)
+    s = sub.add_parser("sentinela")
+    s.add_argument("--intervalo", type=int, default=120)
+    s.add_argument("--limite", type=float, default=75)
     a = p.parse_args()
     if a.cmd == "status":
         print(texto(resumo()))
     elif a.cmd == "json":
         print(json.dumps(resumo(), ensure_ascii=False, indent=2))
+    elif a.cmd == "sentinela":
+        sentinela(a.intervalo, a.limite)
     else:
         vigiar(a.intervalo, a.limite, a.avisar)
 
