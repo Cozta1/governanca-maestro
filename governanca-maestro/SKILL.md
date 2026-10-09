@@ -9,15 +9,15 @@ Esta skill não trata do conteúdo de nenhum projeto. Ela define **como** um pro
 
 Arquivos desta skill:
 - `scripts/grafo.py`: busca em grafo no `brain/`. Python 3 puro, sem dependências.
-- `scripts/uso.py`: limites de uso do Claude e do Codex (exatos: janela de 5 h e semana).
+- `scripts/uso.py`: limites de uso do Claude, do Codex e do Gemini (exatos: janela de 5 h e semana) e criação do Sentinela (`uso.py sentinela`).
 - `referencias/modelos.md`: modelos prontos de cada arquivo (CLAUDE.md, notas, skills, hook). Leia só a seção que for usar.
 - `referencias/planejamento.md`: roteiro da entrevista de planejamento e formato do plano (seção 12).
 
 ## 1. Princípios
-1. **Sonnet constrói, Haiku explora, Opus revisa.** A sessão principal (o maestro) roda em **Sonnet**: planeja, escreve código, delega e integra. **Haiku** explora arquivos e documentação em paralelo, como subagente. **Opus** fica como **assessor** (advisor) e só entra nas decisões importantes. No Codex vale a mesma estrutura: **gpt-6.1-sol** constrói, **gpt-6-luna** explora e **gpt-6.1-sol em xhigh** revisa, **sem nunca usar o gpt-6-astra** (seção 4.2). As duas famílias se revisam uma à outra (revisão cruzada).
+1. **Sonnet constrói, Haiku explora, Opus revisa.** A sessão principal (o maestro) roda em **Sonnet**: planeja, escreve código, delega e integra. **Haiku** explora arquivos e documentação em paralelo, como subagente. **Opus** fica como **assessor** (advisor) e só entra nas decisões importantes. No Codex vale a mesma estrutura: **gpt-6.1-sol** constrói, **gpt-6-luna** explora e **gpt-6.1-sol em xhigh** revisa, **sem nunca usar o gpt-6-astra** (seção 4.2). No Antigravity (Gemini): **gemini-3.8-flash-high** constrói, **gemini-3.8-flash-low** explora e **gemini-3.1-pro-high** revisa (seção 4.2.1). As três famílias se revisam entre si (revisão cruzada).
 2. **Fonte única de contexto: `brain/`.** É a camada de informações e armazenamento do projeto: todo agente consulta o brain antes de agir e grava nele o que descobre. Nenhum conhecimento depende da memória de uma conversa (seção 3).
 3. **Custo mínimo suficiente.** Use o modelo e o esforço mais baratos que resolvem bem a tarefa. Só suba de nível quando ela exigir ou quando a tentativa barata falhar.
-4. **Diversidade na revisão.** Quem implementa nunca revisa o próprio trabalho. A revisão é de preferência cruzada entre famílias (Claude ↔ GPT).
+4. **Diversidade na revisão.** Quem implementa nunca revisa o próprio trabalho. A revisão é de preferência cruzada entre famílias (Claude ↔ GPT ↔ Gemini).
 5. **Nada entra sem verificação.** Typecheck, testes ou execução real antes de dar algo como pronto. Commit só com tudo verde.
 6. **Procedimento repetível vira skill.** Quando algo é feito pela segunda vez, empacote.
 7. **Autonomia com limites claros.** Decisões técnicas e commits locais não precisam de pedido. Confirme antes de qualquer coisa destrutiva ou externa (push, deploy, envio, exclusão, escrita em sistemas de terceiros).
@@ -175,30 +175,46 @@ Ou, de forma fixa por projeto, em `.claude/settings.json` (o bootstrap cria esse
 - Recruta Codex no Maestri: `--preset "Codex" --command "codex -m gpt-6.1-sol -s workspace-write --add-dir <projeto>"` (no Windows, acrescente `-c windows.sandbox=unelevated`; ver seção 10) (o esforço `medium` vem do `config.toml`; se não vier, acrescente `-c model_reasoning_effort=medium`).
 - Modelos mudam: confira os disponíveis em `~/.codex/models_cache.json` e mantenha a regra "o mais recente Sol constrói e revisa, o mais recente Luna explora, nunca Astra".
 
+### 4.2.1 Mesma estrutura no Antigravity (Gemini)
+O Gemini CLI foi descontinuado; o substituto é o **Antigravity CLI `agy`** (verificado na 1.3.1, em 2026-10-09). Confira os modelos com `agy models`.
+| Papel | Modelo | Como |
+|---|---|---|
+| Dirige e constrói | **gemini-3.8-flash-high** | `agy --model gemini-3.8-flash-high --mode accept-edits --add-dir <projeto>` |
+| Explora | **gemini-3.8-flash-low** | recruta (ou prompt) de só leitura |
+| Revisa | **gemini-3.1-pro-high** | recruta revisor; não edita |
+
+- **Cota separada:** o `agy models` também lista claude-opus-5-5-*, claude-sonnet-5-5-* e gpt-oss-120b, num grupo "Claude and GPT models" com cota **própria**, distinta da assinatura Claude. Serve de reserva quando o Claude estiver no limite. A cota do grupo Gemini (`gemini-*`) é a que o `uso.py` mede.
+- **Instalação (Windows):** o `agy.exe` fica em `~/.gemini/bin` e **não entra no PATH sozinho** (o Maestri mostra "CLI não encontrada"). Acrescente o diretório ao PATH do usuário e reinicie o Maestri: `[Environment]::SetEnvironmentVariable('Path', '<atual>;<dir>', 'User')`. O `agy install` também configura, mas mexe em aliases do perfil. Sem PATH, use o caminho completo no `--command`: `C:/Users/<user>/.gemini/bin/agy.exe`.
+- **Recrutar:** `maestri recruit "<Nome>" --preset "Antigravity" --role "<papel>" --command "agy --model gemini-3.8-flash-high --mode accept-edits --add-dir <projeto>"`.
+- **Aprovações:** `--mode accept-edits` aprova edições; comandos pedem permissão (tela "Requesting permission for:", opção 1 = Enter). Não use `--dangerously-skip-permissions`. A skill `vigia-recrutas` (seção 4.8) automatiza as aprovações seguras.
+- **Primeira execução:** tema, termos e o **checkbox de compartilhamento de dados com o Google, que vem MARCADO**. Desmarque (a escolha é do usuário: avise-o) e depois confie na pasta.
+- **Cota:** `agy -p /usage --output-format json` → `command.data.groups[]` com buckets `5h` e `weekly` (`remaining_fraction`, `reset_time` ISO). No Git Bash use `MSYS_NO_PATHCONV=1`; sem isso, `/usage` vira caminho e a pergunta vai para o modelo (gasta ~15 mil tokens). O `uso.py` já faz isso.
+- **Sem papéis de subagente** como no Codex: peça no prompt "explore antes de editar" e "faça uma revisão crítica antes de concluir".
+
 ### 4.3 Ferramentas, em ordem de preferência
-1. **Canvas Maestri** (skills `maestri-manager`, `maestri`, `maestri-routines`, `maestri-workspace`, `maestri-portal`). Agentes visíveis e persistentes, notas compartilhadas, floors (git worktree), portais de navegador/dispositivo e rotinas.
-2. **Subagentes internos do Claude Code** (Haiku por padrão, seção 4.1). São o caminho de **exploração**: paralelos, só leitura, devolvem resumo.
+1. **Canvas Maestri** (skills `maestri-manager`, `maestri`, `maestri-routines`, `maestri-workspace`, `maestri-portal`). Agentes visíveis e persistentes (Claude Code, Codex e Antigravity/`agy`), notas compartilhadas, floors (git worktree), portais de navegador/dispositivo e rotinas.
+2. **Subagentes internos do Claude Code** (Haiku por padrão, seção 4.1). São o caminho de **exploração**: paralelos, só leitura, devolvem resumo. O Codex tem `explorador`/`revisor` (seção 4.2); o Antigravity não tem papéis de subagente (seção 4.2.1).
 3. **O próprio maestro (Sonnet).** Não delegue o que você resolve em 1 ou 2 comandos: delegar também custa (inicialização e contexto).
 
 ### 4.4 Recrutar
 - Rode sempre `maestri list` antes e **reaproveite** quem já existe: o contexto dele já está pago.
 - Defina um **role** por função (escopo de pastas + o que pode e o que não pode fazer) e um **codinome** curto por agente.
-- **Sempre dê ao recruta o diretório do projeto** (`--add-dir <projeto>`; no Codex também `-s workspace-write`). Sem isso, o recruta fica preso na pasta do role.
+- **Sempre dê ao recruta o diretório do projeto** (`--add-dir <projeto>`; no Codex também `-s workspace-write`; no `agy`, `--add-dir` com `--mode accept-edits`). Sem isso, o recruta fica preso na pasta do role.
 - Roles típicos: Dev Backend, Dev App/Front, Dev Testes (E2E), Revisor de Código (não edita), Designer UI/UX, Revisor de Design (não edita), Sentinela (Shell, sem modelo).
 
 ### 4.5 Que modelo para cada campo
-Ajuste a tabela de `orquestracao.md` aos modelos disponíveis.
+Ajuste a tabela de `orquestracao.md` aos modelos disponíveis. "Gemini" = Antigravity (seção 4.2.1): **flash-high** constrói, **flash-low** explora, **pro-high** revisa.
 | Campo | Primário | Alternativa | Esforço |
 |---|---|---|---|
-| Arquitetura, ADRs, integração, decisões | maestro (Sonnet) **+ assessor Opus** | Codex `revisor` (Sol xhigh) como 2ª opinião | médio; alto só se crítico |
-| Backend / algoritmos | gpt-6.1-sol (+ `explorador`) | Sonnet | medium; high em algoritmo |
-| Front / app / UI | Sonnet (+ Haiku para explorar) | gpt-6.1-sol, Gemini | médio |
-| Análise de dados, SQL, relatórios | Sonnet | gpt-6-luna | médio |
-| Testes, refatoração mecânica | gpt-6-luna | Haiku | low / medium |
-| Revisão de código e segurança | família **oposta** à do autor (autor Claude → gpt-6.1-sol em high/xhigh; autor GPT → Sonnet + assessor Opus) | — | médio / alto |
-| Documentação, notas, resumos | Haiku | gpt-6-luna | baixo |
-| Exploração: arquivos, código, documentação | subagentes Haiku em paralelo | Codex `explorador` (Luna) | baixo |
-| Plano, erro repetido, conferência final | assessor Opus (só nesses momentos) | Codex `revisor` (Sol xhigh) | — |
+| Arquitetura, ADRs, integração, decisões | maestro (Sonnet) **+ assessor Opus** | Codex `revisor` (Sol xhigh) ou Gemini 3.1 Pro high como 2ª opinião | médio; alto só se crítico |
+| Backend / algoritmos | gpt-6.1-sol (+ `explorador`) | Gemini 3.8 Flash high (backend isolado), Sonnet | medium; high em algoritmo |
+| Front / app / UI | Sonnet (+ Haiku para explorar) | gpt-6.1-sol, Gemini 3.8 Flash high | médio |
+| Análise de dados, SQL, relatórios | Sonnet | Gemini 3.8 Flash, gpt-6-luna | médio |
+| Testes, refatoração mecânica | gpt-6-luna | Gemini 3.8 Flash low, Haiku | low / medium |
+| Revisão de código e segurança | família **diferente** da do autor (autor Claude → gpt-6.1-sol high/xhigh ou Gemini 3.1 Pro high; autor GPT ou Gemini → Sonnet + assessor Opus) | — | médio / alto |
+| Documentação, notas, resumos | Haiku | Gemini 3.8 Flash low/medium, gpt-6-luna | baixo |
+| Exploração: arquivos, código, documentação | subagentes Haiku em paralelo | Codex `explorador` (Luna), Gemini 3.8 Flash low | baixo |
+| Plano, erro repetido, conferência final | assessor Opus (só nesses momentos) | Codex `revisor` (Sol xhigh), Gemini 3.1 Pro high | — |
 | Qualquer campo | **nunca `gpt-6-astra`** | — | — |
 
 ### 4.6 Delegar bem
@@ -209,7 +225,15 @@ Ajuste a tabela de `orquestracao.md` aos modelos disponíveis.
 - Achados de revisão vão para uma **nota do canvas** ("Revisao <área>") conectada ao autor, que marca cada item como `[corrigido]`, `[backlog]` ou `[não procede]`.
 
 ### 4.7 Ciclo de entrega que funciona
-exploração (Haiku) → plano → **revisão do plano (Opus)** → contrato → implementação em paralelo (Sonnet/Codex) → verificação do maestro (typecheck/testes) → revisão cruzada → correções → E2E → conferência visual (se houver UI) → **conferência final (Opus)** → commit da rodada → brain atualizado.
+exploração (Haiku) → plano → **revisão do plano (Opus)** → contrato → implementação em paralelo (Sonnet/Codex/Gemini) → verificação do maestro (typecheck/testes) → revisão cruzada → correções → E2E → conferência visual (se houver UI) → **conferência final (Opus)** → commit da rodada → brain atualizado.
+
+### 4.8 Trabalho em paralelo no mesmo repositório
+- **Divida por setor e por família**: backend numa família, front em outra. A revisão cruzada (princípio 4) fica natural, porque cada setor é revisado por quem não o escreveu.
+- **Contratos primeiro**: o backend publica os **contratos** (schemas + procedures com stubs) e o maestro os confere **antes** de o front começar.
+- **Commits isolados**: cada agente faz `git commit --only <seus caminhos>` e nunca deixa arquivo alheio no index. O lockfile compartilhado é atualizado sem reverter as entradas do outro.
+- **Banco de testes compartilhado**: serialize as suítes com `pg_advisory_lock` no setup global. Isso também cobre o pre-commit do maestro (que roda a suíte) durante a QA de um recruta.
+- **Aceite do zero** (`down -v`, migrar, seed, suíte completa) pede **janela exclusiva do banco**, coordenada pelo maestro: ninguém mais roda testes enquanto ele dura.
+- **Vigia de aprovações** (skill `vigia-recrutas`, em `skills-base/`): recrutas Codex (sandbox) e Antigravity pedem confirmação de comandos. O maestro copia o `vigia.sh` para o scratchpad e o roda em segundo plano. Ele lê `maestri check` e aprova **uma vez** só comandos locais seguros (leitura, `pnpm install/test/typecheck/lint/build`, `docker compose ps/logs`, `git status/diff/add/commit`). Em qualquer outro (push, exclusões, downloads, instalação global, recriar banco) ele para e avisa o maestro. Nunca escolha "não perguntar de novo".
 
 ## 5. Economia de tokens
 - `status.md` no início; depois disso, **só busca no grafo + leitura por intervalo**.
@@ -218,20 +242,23 @@ exploração (Haiku) → plano → **revisão do plano (Opus)** → contrato →
 - Prefira reaproveitar um recruta a criar outro, e recrutar a carregar tudo no contexto do maestro.
 - **O contexto do Opus é o mais caro: preserve-o.** Ele só recebe o essencial (o plano, o erro com as tentativas feitas, o diff final) e só nos momentos da seção 4.1. A sessão do dia a dia roda em Sonnet.
 - **Exploração em Haiku, não no contexto principal.** Ler muitos arquivos para achar uma coisa é trabalho de subagente: ele devolve `arquivo:linha` e um resumo, e o Sonnet lê só o trecho.
-- Implementação mecânica, testes e documentação vão para os modelos mais baratos (Haiku, gpt-6-luna). No Codex, `xhigh` só no `revisor`; nunca `gpt-6-astra`, `max` ou `ultra` por padrão.
+- Implementação mecânica, testes e documentação vão para os modelos mais baratos (Haiku, gpt-6-luna, gemini-3.8-flash em low/medium). No Codex, `xhigh` só no `revisor`; nunca `gpt-6-astra`, `max` ou `ultra` por padrão.
 - Respostas dos agentes: concisas por contrato do prompt. Relatórios ao usuário: curtos, com o que foi feito, o que foi verificado e o que falta.
 - Skills com divulgação progressiva: um `SKILL.md` enxuto e os detalhes em `referencias/`, lidos só quando necessários.
 - Ao esperar um agente, use um laço de verificação com intervalo (ou um aviso de conclusão) em vez de checar a toda hora.
 
 ## 6. Limites de uso e continuidade
-Skills: `monitor-uso` e `agendar-retomada` (arquivos completos em `skills-base/`, copiados no bootstrap).
-- **Equilíbrio entre assinaturas.** A meta é usar as duas cotas de forma parecida e nunca parar à força. Antes de distribuir trabalho, rode `python .claude/skills/monitor-uso/uso.py status`:
+Skills: `monitor-uso` e `agendar-retomada` (arquivos completos em `skills-base/`, copiados no bootstrap). A `vigia-recrutas` (também em `skills-base/`) é opcional: copie para `.claude/skills/` quando for delegar lotes longos a recrutas Codex ou Antigravity (seção 4.8).
+- **Equilíbrio entre as três assinaturas** (Claude, Codex e Gemini/Antigravity). A meta é usar as cotas de forma parecida e nunca parar à força. Antes de distribuir trabalho, rode `python .claude/skills/monitor-uso/uso.py status`:
   - `preferir: codex` → use gpt-6.1-sol/gpt-6-luna também nos campos em que o Claude é o primário (app, análise, documentação);
-  - `preferir: claude` → o inverso.
-- **Poupe a cota do maestro.** Implementação vai de preferência para o Codex enquanto ele tiver mais folga; o maestro fica com orquestração, decisões e integração.
-- **Sentinela, desde o bootstrap.** Um terminal Shell, sem custo de modelo, roda `uso.py vigiar --intervalo 120 --limite 75` e avisa o maestro (nome em `sentinela-alvo.txt`) em 75% de uso numa janela, 75% do semanal do Codex ou desequilíbrio de 35 pontos ou mais. Cada alerta sai uma vez e é rearmado quando normaliza. É criado na Fase 1 (seção 11), não depois do plano.
-- **Ao receber um alerta:** rode `status`. Família perto do limite → nada longo nela, o próximo trabalho vai para a outra; se a tarefa não puder mudar, `agendar-retomada`. Desequilíbrio → priorize a família com folga nas próximas delegações.
-- **Maestro acima de 85%:** checkpoint no `status.md`, o restante vai para o Codex com instruções completas, retomada agendada.
+  - `preferir: gemini` → use gemini-3.8-flash/gemini-3.1-pro nesses mesmos campos (seção 4.2.1);
+  - `preferir: claude` → o inverso: traga o trabalho de volta para o Claude;
+  - `preferir: equilibrado` → siga a tabela da seção 4.5.
+- **Poupe a cota do maestro.** Implementação vai de preferência para a família com mais folga (Codex ou Gemini); o maestro fica com orquestração, decisões e integração.
+- **Reserva:** o grupo "Claude and GPT models" do Antigravity tem cota própria, separada da assinatura Claude. Com o Claude no limite, ele ainda atende (o `uso.py` não o mede).
+- **Sentinela, desde o bootstrap.** Um terminal Shell, sem custo de modelo, roda `uso.py vigiar --intervalo 120 --limite 75` e avisa o maestro (nome em `sentinela-alvo.txt`) em 75% de uso numa janela ou no semanal de **qualquer das três famílias**, ou com desequilíbrio de 35 pontos ou mais. O painel mostra barras coloridas por família, os horários de reinício e os últimos alertas. Cada alerta sai uma vez e é rearmado quando normaliza. É criado com `python <projeto>/.claude/skills/monitor-uso/uso.py sentinela` na Fase 1 (seção 11), não depois do plano.
+- **Ao receber um alerta:** rode `status`. Família perto do limite → nada longo nela, o próximo trabalho vai para outra; se a tarefa não puder mudar, `agendar-retomada`. Desequilíbrio → priorize a família com folga nas próximas delegações.
+- **Maestro acima de 85%:** checkpoint no `status.md`, o restante vai para o Codex ou o Gemini com instruções completas, retomada agendada.
 - **Limite atingido (reativo):**
   1. Realoque a tarefa para outro modelo disponível.
   2. Se não der, grave o checkpoint em `## Retomada agendada` no `status.md` (tarefa, feito, próximo passo exato, agentes e resets, rotina).
@@ -266,16 +293,22 @@ Skills: `monitor-uso` e `agendar-retomada` (arquivos completos em `skills-base/`
 - Dúvidas que bloqueiam vão para `perguntas-abertas.md` e são agrupadas numa única pergunta ao usuário.
 - No modo autopiloto: escolha a próxima frente pelo roadmap, avise em uma linha e siga com rede de segurança ativa.
 
-## 10. Lições operacionais (Maestri, Codex, Claude Code)
+## 10. Lições operacionais (Maestri, Codex, Claude Code, Antigravity)
 - Antes de adotar dicas da internet sobre flags ou modelos, confira na versão instalada (`claude --help`, um teste com `-p`). Um exemplo: um post recomendava `claude --advisor opus --subagents haiku` com "Haiku 5.5". O `--advisor` existe; o `--subagents` não existe (use `CLAUDE_CODE_SUBAGENT_MODEL`), e o Haiku mais recente é o 4.5 (use o apelido `haiku`).
 - **Codex: o `.codex/config.toml` do projeto só é lido em projetos marcados como confiáveis.** Num teste, os papéis de subagente declarados nele foram ignorados (e o `spawn_agent` caiu no papel padrão). Por isso os papéis ficam na camada do usuário (`~/.codex/config.toml`, via `instalar.sh`). Para conferir qual modelo um subagente usou, veja a tabela `threads` (`agent_role`, `model`, `reasoning_effort`) em `~/.codex/state_5.sqlite`.
-- Prompts longos no Codex podem ficar parados na caixa de entrada. Depois do `ask`, confira com `maestri check` e, se preciso, envie Enter com `maestri ask "<Nome>" --raw "\n"`.
+- Prompts longos no Codex podem ficar parados na caixa de entrada. Depois do `ask`, confira com `maestri check`: com o recruta **ocioso**, envie Enter (`maestri ask "<Nome>" --raw "\n"`); com o recruta **ocupado**, envie `--raw "\t"` (enfileira a mensagem).
 - O sandbox do Codex não tem o CLI `maestri`. Para passar uma nota a ele, copie o conteúdo para um arquivo na pasta do role.
-- Aprovações de comandos do Codex fora do sandbox: aprove **uma vez** (`--raw "y"`), só depois de conferir o comando. Nunca escolha "não perguntar de novo".
+- Aprovações de comandos do Codex fora do sandbox: aprove **uma vez** (`--raw "y"`), só depois de conferir o comando. Nunca escolha "não perguntar de novo". Para lotes longos, use a skill `vigia-recrutas` (seção 4.8).
 - Terminais Windows/PowerShell: evite aspas aninhadas no `--command` e use `.cmd` em vez de `.ps1` para CLIs npm.
 - As cotas são compartilhadas entre o maestro e os recrutas da mesma família.
-- **Uso do Claude é exato**: `uso.py` lê a API de uso da Anthropic (a mesma do `/usage`) com o login local; a estimativa por blocos de mensagens errava muito (mostrou 1% com 21% reais) e não via o semanal. O equilíbrio usa o maior entre janela e semana de cada família.
-- **Codex no Windows**: com `[windows] sandbox = "elevated"`, a versão 0.162 falha em todo comando (`helper_unknown_error: setup refresh had errors`) e pede aprovação para tudo; não depende do modelo. Recrute com `-c windows.sandbox=unelevated`. O Codex também se autoatualiza ao abrir e sai: reinicie com `maestri recruit --replace`.
+- **Uso do Claude é exato**: `uso.py` lê a API de uso da Anthropic (a mesma do `/usage`) com o login local, com cache de 15 min se a API limitar; a estimativa por blocos de mensagens errava muito (mostrou 1% com 21% reais) e não via o semanal. O equilíbrio usa o maior entre janela e semana de cada família. Codex bloqueado aparecia como 0% (eventos sem `resets_at` agora são ignorados). O Gemini vem de `agy -p /usage` (seção 4.2.1).
+- **Codex no Windows**: com `[windows] sandbox = "elevated"`, a versão 0.162 falha em todo comando (`helper_unknown_error: setup refresh had errors`) e pede aprovação para tudo; não depende do modelo. Recrute com `-c windows.sandbox=unelevated` (já está na seção 4.2). O Codex também se autoatualiza ao abrir e sai: reinicie com `maestri recruit --replace`.
+- **Codex no limite**: ele oferece trocar para gpt-6-luna. Mantenha o modelo (opção 2) e agende a retomada (`agendar-retomada`).
+- **Recruta Claude Code novo** pede "confiar na pasta" do papel: seta para baixo + Enter (`maestri ask "<Nome>" --raw $'\x1b[B'` e depois `--raw $'\r'`).
+- **Turborepo** gera `AGENTS.md` sozinho quando detecta um agente: ponha `"agentGuidance": false` no `turbo.json`.
+- **Rotina `--once` com horário vencido** some ao ser reativada: crie outra.
+- **Recruta reaberto perde o contexto**: rebriefe com o estado do working tree e as decisões (ADRs) antes de continuar.
+- **Pre-commit que roda a suíte** (o do maestro): commits do maestro durante a QA de um recruta colidem no banco de testes compartilhado. O `pg_advisory_lock` no setup global (seção 4.8) resolve.
 - Processos em segundo plano do maestro (servidores) param no tempo limite; para servidores de dev, use o máximo.
 - Revisão visual: confira o DOM e a tela realmente servidos, não só o código (caches de bundler enganam).
 
@@ -293,10 +326,10 @@ Gatilho típico: "siga o repo para definir a estrutura base e governança do pro
    - use um vocabulário de tags provisório, que será ajustado no planejamento.
 4. Escreva o `CLAUDE.md` do modelo (a seção de regras não negociáveis fica "a definir no planejamento") e o `.claude/settings.json` com a base de modelos da seção 4.1 (Sonnet + subagentes Haiku + assessor Opus). Avise o usuário que a base vale a partir da próxima sessão, ou já, se ele reiniciar com `claude --model sonnet --advisor opus`.
 5. Salve na memória do usuário as preferências de autonomia e idioma, se ainda não existirem.
-6. **Sentinela** (vigia de gasto; vale já durante o planejamento):
-   - rode `maestri list`; se já houver um "Sentinela" conectado, reaproveite;
-   - grave o nome do seu terminal (linha "You") em `.claude/skills/monitor-uso/sentinela-alvo.txt` e ponha esse arquivo no `.gitignore`;
-   - recrute com o comando da skill `monitor-uso` (preset "Shell", caminho absoluto com `/`, sem aspas internas) e confira com `maestri check "Sentinela"` que ele imprimiu o status e o alvo certo;
+6. **Sentinela** (vigia de gasto das três famílias; vale já durante o planejamento):
+   - rode `python <projeto>/.claude/skills/monitor-uso/uso.py sentinela`: o comando descobre o seu terminal (linha após "You:" de `maestri list`), grava `sentinela-alvo.txt` ao lado do script e recruta o Sentinela (preset "Shell", sem modelo), ou o recria com `--replace` se já existir;
+   - coloque `.claude/skills/monitor-uso/sentinela-alvo.txt` no `.gitignore`;
+   - confira com `maestri check "Sentinela"` que ele imprimiu o status e o alvo certo;
    - registre-o em `orquestracao.md` (Roles: "(Shell) | vigia de uso, sem modelo | Sentinela");
    - sem Maestri ou sem Modo Maestro: avise o usuário e, até lá, rode `uso.py status` antes de cada delegação.
 7. Verifique:

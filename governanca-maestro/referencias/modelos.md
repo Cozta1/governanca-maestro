@@ -153,22 +153,27 @@ O Claude Code é o maestro: planeja, delega, revisa e integra. O `brain/` é a f
 | GPT (Codex) | gpt-6-luna (low) | subagente `explorador`; testes e mecânico | papel `explorador` (`~/.codex/agents/explorador.toml`) |
 | GPT (Codex) | gpt-6.1-sol (xhigh) | subagente `revisor`: plano, erro repetido, conferência final | papel `revisor` (`~/.codex/agents/revisor.toml`) |
 | GPT (Codex) | ~~gpt-6-astra~~ | **não usar** | — |
+| Gemini (Antigravity) | gemini-3.8-flash-high | dirige e constrói: backend isolado, relatórios, documentação | `--preset "Antigravity" --command "agy --model gemini-3.8-flash-high --mode accept-edits --add-dir <projeto>"` (sem `agy` no PATH, use `C:/Users/<user>/.gemini/bin/agy.exe`) |
+| Gemini (Antigravity) | gemini-3.8-flash-low | explora; testes e mecânico | mesmo comando, com `--model gemini-3.8-flash-low` |
+| Gemini (Antigravity) | gemini-3.1-pro-high | revisa (não edita) | mesmo comando, com `--model gemini-3.1-pro-high` |
 
-## Configuração base Claude e Codex
+## Configuração base Claude, Codex e Gemini
 - Claude: Sonnet constrói, Haiku explora, Opus revisa (assessor). Configurado em `.claude/settings.json`; o Opus só entra para revisar planos, desbloquear erros repetidos e fazer a conferência final.
 - Codex: gpt-6.1-sol constrói, `explorador` (gpt-6-luna) explora, `revisor` (gpt-6.1-sol xhigh) revisa. Nunca gpt-6-astra. Os papéis vêm do `instalar.sh`; os prompts dizem quando chamá-los.
+- Gemini (Antigravity): flash-high constrói, flash-low explora, pro-high revisa. Não há papéis de subagente: o prompt pede "explore antes de editar" e "faça uma revisão crítica antes de concluir". O grupo "Claude and GPT models" do Antigravity tem cota própria e serve de reserva quando a assinatura Claude estiver no limite.
 
 ## Que modelo para cada campo
 <tabela campo → primário / alternativa / esforço>
 
-## Equilíbrio de uso Claude × Codex
-- **Objetivo:** usar as duas assinaturas de forma equivalente e nunca parar à força por limite.
+## Equilíbrio de uso Claude × Codex × Gemini
+- **Objetivo:** usar as três assinaturas de forma equivalente e nunca parar à força por limite.
 - **Antes de delegar:** rode `python .claude/skills/monitor-uso/uso.py status`.
   - Se `preferir: codex`, use gpt-6.1-sol/gpt-6-luna também nos campos em que o Claude é o primário: app, análise, documentação.
+  - Se `preferir: gemini`, use gemini-3.8-flash nesses mesmos campos.
   - Se `preferir: claude`, o inverso.
-- Tarefas de implementação vão de preferência para o **Codex enquanto ele tiver mais folga**. O maestro (Claude) fica com orquestração, decisões e integração, para poupar a própria cota.
-- Maestro acima de 85%: checkpoint no `status.md`, o restante vai para o Codex com instruções completas e a retomada é agendada.
-- **Sentinela** (terminal Shell, sem custo de modelo) avisa o maestro em 75% ou em desequilíbrio de 35 pontos ou mais. Skill: `monitor-uso`.
+- Tarefas de implementação vão de preferência para a **família com mais folga** (Codex ou Gemini). O maestro (Claude) fica com orquestração, decisões e integração, para poupar a própria cota.
+- Maestro acima de 85%: checkpoint no `status.md`, o restante vai para o Codex ou o Gemini com instruções completas e a retomada é agendada.
+- **Sentinela** (terminal Shell, sem custo de modelo; criado por `uso.py sentinela`) avisa o maestro em 75% de qualquer das três famílias ou em desequilíbrio de 35 pontos ou mais. Skill: `monitor-uso`.
 - Limite atingido: realocar; senão, checkpoint + `agendar-retomada`. Tarefa longa: rede de segurança antes.
 
 ## Roles criados
@@ -256,7 +261,7 @@ Frontmatter `resumo` / `tags` / `aliases`. Vocabulário de tags: <lista>. Links 
 Não reescreva: copie os arquivos completos desta skill.
 - `skills-base/monitor-uso/SKILL.md` + `scripts/uso.py` → `.claude/skills/monitor-uso/`
 - `skills-base/agendar-retomada/SKILL.md` → `.claude/skills/agendar-retomada/`
-- Crie `.claude/skills/monitor-uso/sentinela-alvo.txt` com o nome do terminal do maestro (linha "You" de `maestri list`) e coloque esse arquivo no `.gitignore`.
+- Coloque `.claude/skills/monitor-uso/sentinela-alvo.txt` no `.gitignore`. O arquivo é criado por `python .claude/skills/monitor-uso/uso.py sentinela` (com o nome do terminal do maestro, linha após "You:" de `maestri list`), que também recruta o Sentinela.
 
 ## Skill "porta única" (recurso sensível)
 ```markdown
